@@ -20,7 +20,7 @@
 #include <asm/glue-df.h>
 #include <asm/glue-pf.h>
 #include <asm/vfpmacros.h>
-#ifndef CONFIG_MULTI_IRQ_HANDLER
+#if !defined(CONFIG_MULTI_IRQ_HANDLER) || defined(CONFIG_PLAT_AMBARELLA_BOSS)
 #include <mach/entry-macro.S>
 #endif
 #include <asm/thread_notify.h>
@@ -204,6 +204,12 @@ __dabt_svc:
 	tst	r5, #PSR_I_BIT
 	blne	trace_hardirqs_off
 #endif
+#ifdef CONFIG_PLAT_AMBARELLA_BOSS
+	stmfd   sp!, {r0-r1, r3, r5}
+	mov     r3, #0
+	boss_int_update r5, r0, r1, r3
+	ldmfd   sp!, {r0-r1, r3, r5}
+#endif
 	svc_exit r5				@ return from exception
  UNWIND(.fnend		)
 ENDPROC(__dabt_svc)
@@ -227,6 +233,12 @@ __irq_svc:
 	@ The parent context IRQs must have been enabled to get here in
 	@ the first place, so there's no point checking the PSR I bit.
 	bl	trace_hardirqs_on
+#endif
+#ifdef CONFIG_PLAT_AMBARELLA_BOSS
+	stmfd   sp!, {r0-r1, r3, r5}
+	mov     r3, #0
+	boss_int_update r5, r0, r1, r3
+	ldmfd   sp!, {r0-r1, r3, r5}
 #endif
 	svc_exit r5				@ return from exception
  UNWIND(.fnend		)
@@ -311,6 +323,12 @@ __und_svc_finish:
 	tst	r5, #PSR_I_BIT
 	blne	trace_hardirqs_off
 #endif
+#ifdef CONFIG_PLAT_AMBARELLA_BOSS
+	stmfd   sp!, {r0-r1, r3, r5}
+	mov     r3, #0
+	boss_int_update r5, r0, r1, r3
+	ldmfd   sp!, {r0-r1, r3, r5}
+#endif
 	svc_exit r5				@ return from exception
  UNWIND(.fnend		)
 ENDPROC(__und_svc)
@@ -331,6 +349,12 @@ __pabt_svc:
 	bleq	trace_hardirqs_on
 	tst	r5, #PSR_I_BIT
 	blne	trace_hardirqs_off
+#endif
+#ifdef CONFIG_PLAT_AMBARELLA_BOSS
+	stmfd   sp!, {r0-r1, r3, r5}
+	mov     r3, #0
+	boss_int_update r5, r0, r1, r3
+	ldmfd   sp!, {r0-r1, r3, r5}
 #endif
 	svc_exit r5				@ return from exception
  UNWIND(.fnend		)

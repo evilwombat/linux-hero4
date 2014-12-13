@@ -28,6 +28,7 @@
 #include <linux/syscore_ops.h>
 #include <linux/ctype.h>
 #include <linux/genhd.h>
+#include <asm/suspend.h>
 
 #include "power.h"
 
@@ -291,6 +292,17 @@ static int create_image(int platform_mode)
 	if (error)
 		printk(KERN_ERR "PM: Error %d creating hibernation image\n",
 			error);
+
+
+	/* Restore control flow magically appears here */
+#if defined(CONFIG_ARCH_HAS_SWSUSP_WRITE)
+	if (in_suspend) {
+		error = arch_swsusp_write(0);
+		if (error)
+			printk(KERN_ERR "PM: Error %d writing "
+				"arch hibernation image\n", error);
+	}
+#endif
 	/* Restore control flow magically appears here */
 	restore_processor_state();
 	if (!in_suspend) {
@@ -316,6 +328,10 @@ static int create_image(int platform_mode)
 	return error;
 }
 
+#ifdef CONFIG_PLAT_AMBARELLA_AMBALINK
+extern int pm_hibernation_recover;
+#endif
+
 /**
  * hibernation_snapshot - Quiesce devices and create a hibernation image.
  * @platform_mode: If set, use platform driver to prepare for the transition.
@@ -328,13 +344,21 @@ int hibernation_snapshot(int platform_mode)
 	int error;
 
 	error = platform_begin(platform_mode);
-	if (error)
+	if (error) {
+#ifdef CONFIG_PLAT_AMBARELLA_AMBALINK
+		pm_hibernation_recover = 1;
+#endif
 		goto Close;
+	}
 
 	/* Preallocate image memory before shutting down devices. */
 	error = hibernate_preallocate_memory();
-	if (error)
+	if (error) {
+#ifdef CONFIG_PLAT_AMBARELLA_AMBALINK
+		pm_hibernation_recover = 1;
+#endif
 		goto Close;
+	}
 
 	error = freeze_kernel_threads();
 	if (error)
@@ -845,7 +869,7 @@ close_finish:
 	goto Finish;
 }
 
-late_initcall(software_resume);
+late_initcall_sync(software_resume);
 
 
 static const char * const hibernation_modes[] = {

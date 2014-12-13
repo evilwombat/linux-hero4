@@ -66,8 +66,12 @@ config HIBERNATION
 
 	  For more information take a look at <file:Documentation/power/swsusp.txt>.
 
+config ARCH_HAS_SWSUSP_WRITE
+	bool "Enable hibernation image write"
+	depends on HIBERNATION
+
 config ARCH_SAVE_PAGE_KEYS
-	bool
+	bool "ARCH_SAVE_PAGE_KEYS"
 
 config PM_STD_PARTITION
 	string "Default resume partition"

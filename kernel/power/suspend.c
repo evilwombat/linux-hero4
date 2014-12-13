@@ -258,6 +258,13 @@ static void suspend_finish(void)
 	suspend_thaw_processes();
 	pm_notifier_call_chain(PM_POST_SUSPEND);
 	pm_restore_console();
+
+#if defined(CONFIG_RPMSG_LINKCTRL)
+	{
+		int rpmsg_linkctrl_cmd_hiber_exit(void);
+		rpmsg_linkctrl_cmd_hiber_exit();
+	}
+#endif
 }
 
 /**

@@ -33,6 +33,27 @@ void sdio_claim_host(struct sdio_func *func)
 }
 EXPORT_SYMBOL_GPL(sdio_claim_host);
 
+#if defined(CONFIG_TI_WL18XX)
+/**
+ *	sdio_claim_host_irq - exclusively claim a bus for a certain SDIO function
+ *	@func: SDIO function that will be accessed
+ *
+ *	Claim a bus for a set of operations. The SDIO function given
+ *	is used to figure out which bus is relevant.
+ *	The function may abort (returing a negative return value) if the sdio
+ *	irq is freed.
+ */
+int sdio_claim_host_irq(struct sdio_func *func)
+{
+	BUG_ON(!func);
+	BUG_ON(!func->card);
+
+	return __mmc_claim_host(func->card->host,
+				&func->card->host->sdio_irq_thread_abort);
+}
+EXPORT_SYMBOL_GPL(sdio_claim_host_irq);
+#endif
+
 /**
  *	sdio_release_host - release a bus for a certain SDIO function
  *	@func: SDIO function that was accessed

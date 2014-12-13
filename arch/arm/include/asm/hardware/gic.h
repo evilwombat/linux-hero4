@@ -52,6 +52,8 @@ static inline void gic_init(unsigned int nr, int start,
 	gic_init_bases(nr, start, dist, cpu, 0, NULL);
 }
 
+u32 gic_suspend(u32 level);
+u32 gic_resume(u32 level);
 #endif
 
 #endif

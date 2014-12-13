@@ -41,4 +41,5 @@ config STE_MODEM_RPROC
 	  This can be either built-in or a loadable module.
 	  If unsure say N.
 
+source "drivers/remoteproc/ambarella/Kconfig"
 endmenu

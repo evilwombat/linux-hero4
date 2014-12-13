@@ -1527,6 +1527,14 @@ static int nand_do_read_ops(struct mtd_info *mtd, loff_t from,
 					oobreadlen -= toread;
 				}
 			}
+
+			if (chip->options & NAND_NEED_READRDY) {
+				/* Apply delay or wait for ready/busy pin */
+				if (!chip->dev_ready)
+					udelay(chip->chip_delay);
+				else
+					nand_wait_ready(mtd);
+			}
 		} else {
 			memcpy(buf, chip->buffers->databuf + col, bytes);
 			buf += bytes;
@@ -1790,6 +1798,14 @@ static int nand_do_read_oob(struct mtd_info *mtd, loff_t from,
 
 		len = min(len, readlen);
 		buf = nand_transfer_oob(chip, buf, ops, len);
+
+		if (chip->options & NAND_NEED_READRDY) {
+			/* Apply delay or wait for ready/busy pin */
+			if (!chip->dev_ready)
+				udelay(chip->chip_delay);
+			else
+				nand_wait_ready(mtd);
+		}
 
 		readlen -= len;
 		if (!readlen)
@@ -3089,6 +3105,19 @@ static void nand_decode_ext_id(struct mtd_info *mtd, struct nand_chip *chip,
 		extid >>= 2;
 		/* Get buswidth information */
 		*busw = (extid & 0x01) ? NAND_BUSWIDTH_16 : 0;
+
+		/*
+		 * Spansion S34ML02G2 and S34ML04G2 have 2x spare.
+		 * We use ECC Level in 5th ID to determine the spare size.
+		 * - ID byte 5, bit[1:0]: 00b -> 1 bit / 512 bytes
+		 *                        01b -> 2 bit / 512 bytes
+		 *                        10b -> 4 bit / 512 bytes
+		 *                        11b -> 8 bit / 512 bytes
+		 */
+		if (id_len >= 5 && id_data[0] == NAND_MFR_AMD &&
+			((id_data[4] & 0x3) > 0x0)) {
+			mtd->oobsize = 32 * (mtd->writesize >> 9);
+		}
 	}
 }
 
@@ -3614,6 +3643,7 @@ int nand_scan_tail(struct mtd_info *mtd)
 		}
 	}
 	chip->subpagesize = mtd->writesize >> mtd->subpage_sft;
+	pr_info("chip->subpagesize = %d\n", chip->subpagesize);
 
 	/* Initialize state */
 	chip->state = FL_READY;

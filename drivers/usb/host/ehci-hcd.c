@@ -1302,6 +1302,11 @@ MODULE_LICENSE ("GPL");
 #define PLATFORM_DRIVER		spear_ehci_hcd_driver
 #endif
 
+#ifdef CONFIG_PLAT_AMBARELLA_SUPPORT_UHC
+#include "ehci-ambarella.c"
+#define	PLATFORM_DRIVER		ehci_hcd_ambarella_driver
+#endif
+
 #ifdef CONFIG_USB_EHCI_MSM
 #include "ehci-msm.c"
 #define PLATFORM_DRIVER		ehci_msm_driver

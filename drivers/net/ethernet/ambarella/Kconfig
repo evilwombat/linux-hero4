@@ -1,0 +1,13 @@
+#
+# AMBARELLA network device configuration
+#
+
+config NET_VENDOR_AMBARELLA
+	tristate "Ambarella 10/100/1000 GMAC Ethernet support"
+	depends on PLAT_AMBARELLA_SUPPORT_ETH
+	select CRC32
+	select PHYLIB
+	select MII
+	help
+	  This driver supports Ambarella 10/100/1000 GMAC Ethernet.
+

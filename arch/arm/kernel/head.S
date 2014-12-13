@@ -123,7 +123,9 @@ ENTRY(stext)
 #ifdef CONFIG_ARM_PATCH_PHYS_VIRT
 	bl	__fixup_pv_table
 #endif
+#ifndef CONFIG_PLAT_AMBARELLA_BOSS
 	bl	__create_page_tables
+#endif
 
 	/*
 	 * The following calls CPU specific code in a position independent
@@ -135,11 +137,28 @@ ENTRY(stext)
 	ldr	r13, =__mmap_switched		@ address to jump to after
 						@ mmu has been enabled
 	adr	lr, BSYM(1f)			@ return (PIC) address
+
+#ifdef CONFIG_PLAT_AMBARELLA_BOSS
+	mrc	p15, 0, r4, c2, c0, 0		@ read TTBR0 which is set by RTOS
 	mov	r8, r4				@ set TTBR1 to swapper_pg_dir
+#else
+	mov	r8, r4				@ set TTBR1 to swapper_pg_dir
+#endif
  ARM(	add	pc, r10, #PROCINFO_INITFUNC	)
  THUMB(	add	r12, r10, #PROCINFO_INITFUNC	)
  THUMB(	mov	pc, r12				)
-1:	b	__enable_mmu
+1:
+#ifdef CONFIG_PLAT_AMBARELLA_BOSS
+	mov     r5, #(domain_val(DOMAIN_USER, DOMAIN_MANAGER) | \
+                     domain_val(DOMAIN_KERNEL, DOMAIN_MANAGER) | \
+                     domain_val(DOMAIN_TABLE, DOMAIN_MANAGER) | \
+                     domain_val(DOMAIN_IO, DOMAIN_CLIENT))
+	mcr     p15, 0, r5, c3, c0, 0           @ load domain access register
+
+	mov     pc, r13
+#else
+	b	__enable_mmu
+#endif
 ENDPROC(stext)
 	.ltorg
 #ifndef CONFIG_XIP_KERNEL
@@ -437,14 +456,12 @@ ENDPROC(__enable_mmu)
  *
  * other registers depend on the function called upon completion
  */
-	.align	5
 	.pushsection	.idmap.text, "ax"
+	.align	5
 ENTRY(__turn_mmu_on)
 	mov	r0, r0
-	instr_sync
 	mcr	p15, 0, r0, c1, c0, 0		@ write control reg
 	mrc	p15, 0, r3, c0, c0, 0		@ read id reg
-	instr_sync
 	mov	r3, r3
 	mov	r3, r13
 	mov	pc, r3

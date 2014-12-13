@@ -34,6 +34,10 @@
 #include <linux/rpmsg.h>
 #include <linux/mutex.h>
 
+#include <linux/remoteproc.h>
+#include <plat/remoteproc.h>
+#include <plat/ambalink_cfg.h>
+
 /**
  * struct virtproc_info - virtual remote processor state
  * @vdev:	the virtio device
@@ -62,7 +66,11 @@ struct virtproc_info {
 	void *rbufs, *sbufs;
 	int last_sbuf;
 	dma_addr_t bufs_dma;
+#if defined(CONFIG_RPMSG_TX_SPINLOCK)
+	spinlock_t tx_lock;
+#else
 	struct mutex tx_lock;
+#endif
 	struct idr endpoints;
 	struct mutex endpoints_lock;
 	wait_queue_head_t sendq;
@@ -82,6 +90,18 @@ struct rpmsg_channel_info {
 	u32 dst;
 };
 
+#if defined(CONFIG_RPMSG_TX_SPINLOCK)
+#if 1
+#define rpmsg_tx_lock(x, y)	spin_lock_irqsave(x, y)
+#define rpmsg_tx_unlock(x, y)	spin_unlock_irqrestore(x, y)
+#else
+#define rpmsg_tx_lock(x)	spin_lock_irq(x)
+#define rpmsg_tx_unlock(x)	spin_unlock_irq(x)
+#endif
+#else
+#define rpmsg_tx_lock(x)	mutex_lock(x)
+#define rpmsg_tx_unlock(x)	mutex_unlock(x)
+#endif
 #define to_rpmsg_channel(d) container_of(d, struct rpmsg_channel, dev)
 #define to_rpmsg_driver(d) container_of(d, struct rpmsg_driver, drv)
 
@@ -102,9 +122,12 @@ struct rpmsg_channel_info {
  * can change this without changing anything in the firmware of the remote
  * processor.
  */
-#define RPMSG_NUM_BUFS		(512)
-#define RPMSG_BUF_SIZE		(512)
-#define RPMSG_TOTAL_BUF_SPACE	(RPMSG_NUM_BUFS * RPMSG_BUF_SIZE)
+
+/*
+ * Keep the following sync'ed to the copy which shared between processors
+ *     arch/arm/plat-ambarella/include/plat/remoteproc_cfg.h
+ */
+
 
 /*
  * Local addresses are dynamically allocated on-demand.
@@ -140,6 +163,61 @@ rpmsg_show_attr(announce, announce ? "true" : "false", "%s\n");
  * to change if/when we want to.
  */
 static unsigned int rpmsg_dev_index;
+
+
+
+#if RPMSG_DEBUG
+
+static AMBA_RPMSG_PROFILE_s *svq_profile, *rvq_profile;
+static AMBA_RPMSG_STATISTIC_s *rpmsg_stat;
+
+
+/* The counter is decreasing, so start will large than end normally.*/
+static unsigned int calc_timer_diff(unsigned int start, unsigned int end){
+	unsigned int diff;
+	if(end <= start) {
+		diff = start - end;
+	}
+	else{
+		diff = 0xFFFFFFFF - end + 1 + start;
+	}
+	return diff;
+}
+
+static void calc_rpmsg_stats(int idx, struct profile_data data){
+	unsigned int diff;
+	diff = calc_timer_diff(data.ToGetSvqBuffer, data.SvqSendInterrupt);
+	rpmsg_stat->TxSendRpmsgTime += diff;
+	diff = calc_timer_diff(data.SvqSendInterrupt, data.ToGetRvqBuffer);
+	rpmsg_stat->LxResponseTime += diff;
+	if(diff > rpmsg_stat->MaxLxResponseTime){
+		rpmsg_stat->MaxLxResponseTime = diff;
+	}
+
+	diff = calc_timer_diff(data.ToGetRvqBuffer, data.ToRecvData);
+	rpmsg_stat->LxRecvRpmsgTime += diff;
+	diff = calc_timer_diff(data.ToRecvData, data.RecvData);
+	rpmsg_stat->LxRecvCallBackTime += diff;
+	if(diff > rpmsg_stat->MaxLxRecvCBTime){
+		rpmsg_stat->MaxLxRecvCBTime = diff;
+	}
+	if(diff < rpmsg_stat->MinLxRecvCBTime){
+		rpmsg_stat->MinLxRecvCBTime = diff;
+	}
+	diff = calc_timer_diff(data.RecvData, data.RvqToSendInterrupt);
+	rpmsg_stat->LxReleaseVqTime += diff;
+	diff = calc_timer_diff(data.ToGetSvqBuffer, data.ToRecvData);
+	rpmsg_stat->TxToLxRpmsgTime += diff;
+	if(diff > rpmsg_stat->MaxTxToLxRpmsgTime){
+		rpmsg_stat->MaxTxToLxRpmsgTime = diff;
+	}
+	if(diff < rpmsg_stat->MinTxToLxRpmsgTime){
+		rpmsg_stat->MinTxToLxRpmsgTime = diff;
+	}
+
+	rpmsg_stat->TxToLxCount++;
+}
+#endif
 
 static ssize_t modalias_show(struct device *dev,
 			     struct device_attribute *attr, char *buf)
@@ -573,25 +651,29 @@ static int rpmsg_destroy_channel(struct virtproc_info *vrp,
 }
 
 /* super simple buffer "allocator" that is just enough for now */
-static void *get_a_tx_buf(struct virtproc_info *vrp)
+static void *get_a_tx_buf(struct virtproc_info *vrp, int *idx)
 {
 	unsigned int len;
 	void *ret;
+	unsigned int flags;
 
 	/* support multiple concurrent senders */
-	mutex_lock(&vrp->tx_lock);
+	rpmsg_tx_lock(&vrp->tx_lock, flags);
 
 	/*
 	 * either pick the next unused tx buffer
 	 * (half of our buffers are used for sending messages)
 	 */
 	if (vrp->last_sbuf < RPMSG_NUM_BUFS / 2)
+	{
+		*idx = vrp->last_sbuf;
 		ret = vrp->sbufs + RPMSG_BUF_SIZE * vrp->last_sbuf++;
+	}
 	/* or recycle a used one */
 	else
-		ret = virtqueue_get_buf(vrp->svq, &len);
+		ret = virtqueue_get_buf_index(vrp->svq, &len, idx);
 
-	mutex_unlock(&vrp->tx_lock);
+	rpmsg_tx_unlock(&vrp->tx_lock, flags);
 
 	return ret;
 }
@@ -614,15 +696,17 @@ static void *get_a_tx_buf(struct virtproc_info *vrp)
  */
 static void rpmsg_upref_sleepers(struct virtproc_info *vrp)
 {
+	unsigned int flags;
+
 	/* support multiple concurrent senders */
-	mutex_lock(&vrp->tx_lock);
+	rpmsg_tx_lock(&vrp->tx_lock, flags);
 
 	/* are we the first sleeping context waiting for tx buffers ? */
 	if (atomic_inc_return(&vrp->sleepers) == 1)
 		/* enable "tx-complete" interrupts before dozing off */
 		virtqueue_enable_cb(vrp->svq);
 
-	mutex_unlock(&vrp->tx_lock);
+	rpmsg_tx_unlock(&vrp->tx_lock, flags);
 }
 
 /**
@@ -641,15 +725,17 @@ static void rpmsg_upref_sleepers(struct virtproc_info *vrp)
  */
 static void rpmsg_downref_sleepers(struct virtproc_info *vrp)
 {
+	unsigned int flags;
+
 	/* support multiple concurrent senders */
-	mutex_lock(&vrp->tx_lock);
+	rpmsg_tx_lock(&vrp->tx_lock, flags);
 
 	/* are we the last sleeping context waiting for tx buffers ? */
 	if (atomic_dec_and_test(&vrp->sleepers))
 		/* disable "tx-complete" interrupts */
 		virtqueue_disable_cb(vrp->svq);
 
-	mutex_unlock(&vrp->tx_lock);
+	rpmsg_tx_unlock(&vrp->tx_lock, flags);
 }
 
 /**
@@ -693,7 +779,22 @@ int rpmsg_send_offchannel_raw(struct rpmsg_channel *rpdev, u32 src, u32 dst,
 	struct device *dev = &rpdev->dev;
 	struct scatterlist sg;
 	struct rpmsg_hdr *msg;
-	int err;
+	int err, idx;
+	unsigned int flags;
+
+#if RPMSG_DEBUG
+	unsigned int prev_time, current_time, diff;
+	prev_time = amba_readl(PROFILE_TIMER);
+	/* calculate rpmsg injection rate */
+	if( rpmsg_stat->LxLastInjectTime != 0 ){
+		diff = calc_timer_diff(rpmsg_stat->LxLastInjectTime, prev_time);
+	}
+	else{
+		diff = 0;
+	}
+	rpmsg_stat->LxTotalInjectTime += diff;
+	rpmsg_stat->LxLastInjectTime = prev_time;
+#endif
 
 	/* bcasting isn't allowed */
 	if (src == RPMSG_ADDR_ANY || dst == RPMSG_ADDR_ANY) {
@@ -716,7 +817,7 @@ int rpmsg_send_offchannel_raw(struct rpmsg_channel *rpdev, u32 src, u32 dst,
 	}
 
 	/* grab a buffer */
-	msg = get_a_tx_buf(vrp);
+	msg = get_a_tx_buf(vrp, &idx);
 	if (!msg && !wait)
 		return -ENOMEM;
 
@@ -732,7 +833,7 @@ int rpmsg_send_offchannel_raw(struct rpmsg_channel *rpdev, u32 src, u32 dst,
 		 * if later this happens to be required, it'd be easy to add.
 		 */
 		err = wait_event_interruptible_timeout(vrp->sendq,
-					(msg = get_a_tx_buf(vrp)),
+					(msg = get_a_tx_buf(vrp, &idx)),
 					msecs_to_jiffies(15000));
 
 		/* disable "tx-complete" interrupts if we're the last sleeper */
@@ -744,7 +845,11 @@ int rpmsg_send_offchannel_raw(struct rpmsg_channel *rpdev, u32 src, u32 dst,
 			return -ERESTARTSYS;
 		}
 	}
-
+#if RPMSG_DEBUG
+	current_time = amba_readl(PROFILE_TIMER);
+	svq_profile[idx].ToGetSvqBuffer = prev_time;
+	svq_profile[idx].GetSvqBuffer = current_time;
+#endif
 	msg->len = len;
 	msg->flags = 0;
 	msg->src = src;
@@ -755,12 +860,14 @@ int rpmsg_send_offchannel_raw(struct rpmsg_channel *rpdev, u32 src, u32 dst,
 	dev_dbg(dev, "TX From 0x%x, To 0x%x, Len %d, Flags %d, Reserved %d\n",
 					msg->src, msg->dst, msg->len,
 					msg->flags, msg->reserved);
+#if 0
 	print_hex_dump(KERN_DEBUG, "rpmsg_virtio TX: ", DUMP_PREFIX_NONE, 16, 1,
 					msg, sizeof(*msg) + msg->len, true);
+#endif
 
 	sg_init_one(&sg, msg, sizeof(*msg) + len);
 
-	mutex_lock(&vrp->tx_lock);
+	rpmsg_tx_lock(&vrp->tx_lock, flags);
 
 	/* add message to the remote processor's virtqueue */
 	err = virtqueue_add_buf(vrp->svq, &sg, 1, 0, msg, GFP_KERNEL);
@@ -774,10 +881,19 @@ int rpmsg_send_offchannel_raw(struct rpmsg_channel *rpdev, u32 src, u32 dst,
 		goto out;
 	}
 
+#if RPMSG_DEBUG
+		current_time = amba_readl(PROFILE_TIMER);
+		svq_profile[idx].SvqToSendInterrupt = current_time;
+#endif
+
 	/* tell the remote processor it has a pending message to read */
 	virtqueue_kick(vrp->svq);
+#if RPMSG_DEBUG
+	svq_profile[idx].SvqSendInterrupt = amba_readl(PROFILE_TIMER);
+#endif
+
 out:
-	mutex_unlock(&vrp->tx_lock);
+	rpmsg_tx_unlock(&vrp->tx_lock, flags);
 	return err;
 }
 EXPORT_SYMBOL(rpmsg_send_offchannel_raw);
@@ -791,9 +907,18 @@ static void rpmsg_recv_done(struct virtqueue *rvq)
 	struct scatterlist sg;
 	struct virtproc_info *vrp = rvq->vdev->priv;
 	struct device *dev = &rvq->vdev->dev;
-	int err;
+	int err, idx;
+#if RPMSG_DEBUG
+	struct profile_data data;
+	memset(&data, 0, sizeof(struct profile_data));
+	data.ToGetRvqBuffer = amba_readl(PROFILE_TIMER);
+#endif
+	msg = virtqueue_get_buf_index(rvq, &len, &idx);
 
-	msg = virtqueue_get_buf(rvq, &len);
+#if RPMSG_DEBUG
+	data.GetRvqBuffer = amba_readl(PROFILE_TIMER);
+#endif
+
 	if (!msg) {
 		dev_err(dev, "uhm, incoming signal, but no used buffer ?\n");
 		return;
@@ -802,8 +927,10 @@ static void rpmsg_recv_done(struct virtqueue *rvq)
 	dev_dbg(dev, "From: 0x%x, To: 0x%x, Len: %d, Flags: %d, Reserved: %d\n",
 					msg->src, msg->dst, msg->len,
 					msg->flags, msg->reserved);
+#if 0
 	print_hex_dump(KERN_DEBUG, "rpmsg_virtio RX: ", DUMP_PREFIX_NONE, 16, 1,
 					msg, sizeof(*msg) + msg->len, true);
+#endif
 
 	/*
 	 * We currently use fixed-sized buffers, so trivially sanitize
@@ -830,10 +957,16 @@ static void rpmsg_recv_done(struct virtqueue *rvq)
 		/* make sure ept->cb doesn't go away while we use it */
 		mutex_lock(&ept->cb_lock);
 
-		if (ept->cb)
+		if (ept->cb){
+#if RPMSG_DEBUG
+			data.ToRecvData = amba_readl(PROFILE_TIMER);
+#endif
 			ept->cb(ept->rpdev, msg->data, msg->len, ept->priv,
 				msg->src);
-
+#if RPMSG_DEBUG
+			data.RecvData = amba_readl(PROFILE_TIMER);
+#endif
+		}
 		mutex_unlock(&ept->cb_lock);
 
 		/* farewell, ept, we don't need you anymore */
@@ -844,15 +977,30 @@ static void rpmsg_recv_done(struct virtqueue *rvq)
 	/* publish the real size of the buffer */
 	sg_init_one(&sg, msg, RPMSG_BUF_SIZE);
 
+#if RPMSG_DEBUG
+	data.ReleaseRvq = amba_readl(PROFILE_TIMER);
+	/* before return the used buffer, we store statistics to avoid the same buffer used again
+	to overwrite the original statistics. */
+	data.ToGetSvqBuffer = rvq_profile[idx].ToGetSvqBuffer;
+	data.GetSvqBuffer = rvq_profile[idx].GetSvqBuffer;
+	data.SvqToSendInterrupt = rvq_profile[idx].SvqToSendInterrupt;
+	data.SvqSendInterrupt = rvq_profile[idx].SvqSendInterrupt; 
+#endif
 	/* add the buffer back to the remote processor's virtqueue */
 	err = virtqueue_add_buf(vrp->rvq, &sg, 0, 1, msg, GFP_KERNEL);
 	if (err < 0) {
 		dev_err(dev, "failed to add a virtqueue buffer: %d\n", err);
 		return;
 	}
-
+#if RPMSG_DEBUG
+	data.RvqToSendInterrupt = amba_readl(PROFILE_TIMER);
+#endif
 	/* tell the remote processor we added another available rx buffer */
 	virtqueue_kick(vrp->rvq);
+#if RPMSG_DEBUG
+	data.RvqSendInterrupt = amba_readl(PROFILE_TIMER);
+	calc_rpmsg_stats(idx, data);
+#endif
 }
 
 /*
@@ -927,6 +1075,9 @@ static void rpmsg_ns_cb(struct rpmsg_channel *rpdev, void *data, int len,
 
 static int rpmsg_probe(struct virtio_device *vdev)
 {
+	struct rproc *rproc = vdev_to_rproc(vdev);
+	struct ambarella_rproc_pdata *pdata;
+
 	vq_callback_t *vq_cbs[] = { rpmsg_recv_done, rpmsg_xmit_done };
 	const char *names[] = { "input", "output" };
 	struct virtqueue *vqs[2];
@@ -942,7 +1093,11 @@ static int rpmsg_probe(struct virtio_device *vdev)
 
 	idr_init(&vrp->endpoints);
 	mutex_init(&vrp->endpoints_lock);
+#if defined(CONFIG_RPMSG_TX_SPINLOCK)
+	spin_lock_init(&vrp->tx_lock);
+#else
 	mutex_init(&vrp->tx_lock);
+#endif
 	init_waitqueue_head(&vrp->sendq);
 
 	/* We expect two virtqueues, rx and tx (and in this order) */
@@ -953,10 +1108,19 @@ static int rpmsg_probe(struct virtio_device *vdev)
 	vrp->rvq = vqs[0];
 	vrp->svq = vqs[1];
 
+#if 0
 	/* allocate coherent memory for the buffers */
 	bufs_va = dma_alloc_coherent(vdev->dev.parent->parent,
 				RPMSG_TOTAL_BUF_SPACE,
 				&vrp->bufs_dma, GFP_KERNEL);
+#else
+	pdata = rproc->priv;
+#ifdef CONFIG_PLAT_AMBARELLA_BOSS
+	bufs_va = (void *) pdata->buf_addr_pa;
+#else
+	bufs_va = (void *)ambarella_phys_to_virt((unsigned long)pdata->buf_addr_pa);
+#endif
+#endif
 	if (!bufs_va)
 		goto vqs_del;
 
@@ -1069,6 +1233,16 @@ static struct virtio_driver virtio_ipc_driver = {
 static int __init rpmsg_init(void)
 {
 	int ret;
+	unsigned int profile_addr;
+
+#if RPMSG_DEBUG
+	/* The starting addr for storing profiling data. */
+	rpmsg_stat = (AMBA_RPMSG_STATISTIC_s *) ambarella_phys_to_virt(RPMSG_PROFILE_ADDR);
+	profile_addr = ambarella_phys_to_virt(RPMSG_PROFILE_ADDR + sizeof(AMBA_RPMSG_STATISTIC_s));
+	svq_profile = (AMBA_RPMSG_PROFILE_s *) profile_addr;
+	profile_addr = ambarella_phys_to_virt(RPMSG_PROFILE_ADDR + sizeof(AMBA_RPMSG_STATISTIC_s) + sizeof(AMBA_RPMSG_PROFILE_s)*(RPMSG_BUF_SIZE/2));
+	rvq_profile = (AMBA_RPMSG_PROFILE_s *) profile_addr;
+#endif
 
 	ret = bus_register(&rpmsg_bus);
 	if (ret) {

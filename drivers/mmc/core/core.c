@@ -2062,6 +2062,24 @@ EXPORT_SYMBOL(mmc_hw_reset_check);
 
 static int mmc_rescan_try_freq(struct mmc_host *host, unsigned freq)
 {
+#if defined(CONFIG_RPMSG_SD)
+	struct rpdev_sdinfo *sdinfo;
+
+	ambarella_sd_rpmsg_sdinfo_init(host);
+	sdinfo = ambarella_sd_sdinfo_get(host);
+	ambarella_sd_rpmsg_sdinfo_en(host, sdinfo->is_init);
+
+	if (sdinfo->is_init) {
+		if (sdinfo->is_sdmem) {
+			return mmc_attach_sd(host);
+		} else if (sdinfo->is_mmc) {
+			return mmc_attach_mmc(host);
+		} else {
+			ambarella_sd_rpmsg_sdinfo_en(host, 0);
+		}
+	}
+#endif
+
 	host->f_init = freq;
 
 #ifdef CONFIG_MMC_DEBUG
@@ -2095,6 +2113,7 @@ static int mmc_rescan_try_freq(struct mmc_host *host, unsigned freq)
 		return 0;
 
 	mmc_power_off(host);
+	host->ocr = 0;
 	return -EIO;
 }
 
@@ -2555,6 +2574,7 @@ int mmc_pm_notify(struct notifier_block *notify_block,
 		if (!host->bus_ops || host->bus_ops->suspend)
 			break;
 
+		mmc_bus_get(host);
 		/* Calling bus_ops->remove() with a claimed host can deadlock */
 		if (host->bus_ops->remove)
 			host->bus_ops->remove(host);
@@ -2564,6 +2584,7 @@ int mmc_pm_notify(struct notifier_block *notify_block,
 		mmc_power_off(host);
 		mmc_release_host(host);
 		host->pm_flags = 0;
+		mmc_bus_put(host);
 		break;
 
 	case PM_POST_SUSPEND:

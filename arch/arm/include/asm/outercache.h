@@ -35,6 +35,10 @@ struct outer_cache_fns {
 #endif
 	void (*set_debug)(unsigned long);
 	void (*resume)(void);
+
+	void (*clean_all)(void);
+	void (*enable)(void);
+	int (*is_enabled)(void);
 };
 
 #ifdef CONFIG_OUTER_CACHE
@@ -81,6 +85,25 @@ static inline void outer_resume(void)
 		outer_cache.resume();
 }
 
+static inline void outer_clean_all(void)
+{
+	if (outer_cache.clean_all)
+		outer_cache.clean_all();
+}
+
+static inline void outer_enable(void)
+{
+	if (outer_cache.enable)
+		outer_cache.enable();
+}
+
+static inline int outer_is_enabled(void)
+{
+	if (outer_cache.is_enabled)
+		return outer_cache.is_enabled();
+	return 0;
+}
+
 #else
 
 static inline void outer_inv_range(phys_addr_t start, phys_addr_t end)
@@ -92,6 +115,9 @@ static inline void outer_flush_range(phys_addr_t start, phys_addr_t end)
 static inline void outer_flush_all(void) { }
 static inline void outer_inv_all(void) { }
 static inline void outer_disable(void) { }
+static inline void outer_clean_all(void) { }
+static inline void outer_enable(void) { }
+static inline int outer_is_enabled(void) { return 0; }
 
 #endif
 

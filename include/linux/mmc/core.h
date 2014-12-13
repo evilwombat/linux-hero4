@@ -118,6 +118,9 @@ struct mmc_data {
 	unsigned int		sg_len;		/* size of scatter list */
 	struct scatterlist	*sg;		/* I/O scatter list */
 	s32			host_cookie;	/* host private data */
+#if defined(CONFIG_RPMSG_SD)
+	void			*buf;
+#endif
 };
 
 struct mmc_request {

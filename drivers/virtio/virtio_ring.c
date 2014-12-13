@@ -24,6 +24,12 @@
 #include <linux/module.h>
 #include <linux/hrtimer.h>
 
+#ifdef CONFIG_PLAT_AMBARELLA_AMBALINK
+#define SG_PHYS(sg) (page_to_phys(sg_page(sg)) + sg->offset - DEFAULT_MEM_START)
+#else
+#define SG_PHYS(sg) sg_phys(sg)
+#endif
+
 /* virtio guest is communicating with a virtual "device" that actually runs on
  * a host processor.  Memory barriers are used to control SMP effects. */
 #ifdef CONFIG_SMP
@@ -144,14 +150,23 @@ static int vring_add_indirect(struct vring_virtqueue *vq,
 	/* Transfer entries from the sg list into the indirect page */
 	for (i = 0; i < out; i++) {
 		desc[i].flags = VRING_DESC_F_NEXT;
-		desc[i].addr = sg_phys(sg);
+
+#ifdef CONFIG_PLAT_AMBARELLA_BOSS
+		desc[i].addr = ambarella_phys_to_virt(SG_PHYS(sg));
+#else
+		desc[i].addr = SG_PHYS(sg);
+#endif
 		desc[i].len = sg->length;
 		desc[i].next = i+1;
 		sg++;
 	}
 	for (; i < (out + in); i++) {
 		desc[i].flags = VRING_DESC_F_NEXT|VRING_DESC_F_WRITE;
-		desc[i].addr = sg_phys(sg);
+#ifdef CONFIG_PLAT_AMBARELLA_BOSS
+		desc[i].addr = ambarella_phys_to_virt(SG_PHYS(sg));
+#else
+		desc[i].addr = SG_PHYS(sg);
+#endif
 		desc[i].len = sg->length;
 		desc[i].next = i+1;
 		sg++;
@@ -247,14 +262,22 @@ int virtqueue_add_buf(struct virtqueue *_vq,
 	head = vq->free_head;
 	for (i = vq->free_head; out; i = vq->vring.desc[i].next, out--) {
 		vq->vring.desc[i].flags = VRING_DESC_F_NEXT;
-		vq->vring.desc[i].addr = sg_phys(sg);
+#ifdef CONFIG_PLAT_AMBARELLA_BOSS
+		vq->vring.desc[i].addr = ambarella_phys_to_virt(SG_PHYS(sg));
+#else
+		vq->vring.desc[i].addr = SG_PHYS(sg);
+#endif
 		vq->vring.desc[i].len = sg->length;
 		prev = i;
 		sg++;
 	}
 	for (; in; i = vq->vring.desc[i].next, in--) {
 		vq->vring.desc[i].flags = VRING_DESC_F_NEXT|VRING_DESC_F_WRITE;
-		vq->vring.desc[i].addr = sg_phys(sg);
+#ifdef CONFIG_PLAT_AMBARELLA_BOSS
+		vq->vring.desc[i].addr = ambarella_phys_to_virt(SG_PHYS(sg));
+#else
+		vq->vring.desc[i].addr = SG_PHYS(sg);
+#endif
 		vq->vring.desc[i].len = sg->length;
 		prev = i;
 		sg++;
@@ -380,8 +403,13 @@ static void detach_buf(struct vring_virtqueue *vq, unsigned int head)
 	i = head;
 
 	/* Free the indirect table */
+#ifdef CONFIG_PLAT_AMBARELLA_BOSS
+	if (vq->vring.desc[i].flags & VRING_DESC_F_INDIRECT)
+		kfree(vq->vring.desc[i].addr);
+#else
 	if (vq->vring.desc[i].flags & VRING_DESC_F_INDIRECT)
 		kfree(phys_to_virt(vq->vring.desc[i].addr));
+#endif
 
 	while (vq->vring.desc[i].flags & VRING_DESC_F_NEXT) {
 		i = vq->vring.desc[i].next;
@@ -471,6 +499,82 @@ void *virtqueue_get_buf(struct virtqueue *_vq, unsigned int *len)
 	return ret;
 }
 EXPORT_SYMBOL_GPL(virtqueue_get_buf);
+
+/**
+ * virtqueue_get_buf_index - get the next used buffer
+ * almost the same to virtqueue_get_buf, the only difference is to 
+ * return the index of the available buffer.
+ * @vq: the struct virtqueue we're talking about.
+ * @len: the length written into the buffer
+ * @idx: the index for the available buffer
+ * If the driver wrote data into the buffer, @len will be set to the
+ * amount written.  This means you don't need to clear the buffer
+ * beforehand to ensure there's no data leakage in the case of short
+ * writes.
+ *
+ * Caller must ensure we don't call this with other virtqueue
+ * operations at the same time (except where noted).
+ *
+ * Returns NULL if there are no used buffers, or the "data" token
+ * handed to virtqueue_add_buf().
+ */
+void *virtqueue_get_buf_index(struct virtqueue *_vq, unsigned int *len, int *idx)
+{
+	struct vring_virtqueue *vq = to_vvq(_vq);
+	void *ret;
+	unsigned int i;
+	u16 last_used;
+
+	START_USE(vq);
+
+	if (unlikely(vq->broken)) {
+		END_USE(vq);
+		return NULL;
+	}
+
+	if (!more_used(vq)) {
+		pr_debug("No more buffers in queue\n");
+		END_USE(vq);
+		return NULL;
+	}
+
+	/* Only get used array entries after they have been exposed by host. */
+	virtio_rmb(vq);
+
+	last_used = (vq->last_used_idx & (vq->vring.num - 1));
+	i = vq->vring.used->ring[last_used].id;
+	*len = vq->vring.used->ring[last_used].len;
+
+	if (unlikely(i >= vq->vring.num)) {
+		BAD_RING(vq, "id %u out of range\n", i);
+		return NULL;
+	}
+	if (unlikely(!vq->data[i])) {
+		BAD_RING(vq, "id %u is not a head!\n", i);
+		return NULL;
+	}
+
+	/* detach_buf clears data, so grab it now. */
+	*idx = i;
+	ret = vq->data[i];
+	detach_buf(vq, i);
+	vq->last_used_idx++;
+	/* If we expect an interrupt for the next entry, tell host
+	 * by writing event index and flush out the write before
+	 * the read in the next get_buf call. */
+	if (!(vq->vring.avail->flags & VRING_AVAIL_F_NO_INTERRUPT)) {
+		vring_used_event(&vq->vring) = vq->last_used_idx;
+		virtio_mb(vq);
+	}
+
+#ifdef DEBUG
+	vq->last_add_time_valid = false;
+#endif
+
+	END_USE(vq);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(virtqueue_get_buf_index);
 
 /**
  * virtqueue_disable_cb - disable callbacks

@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 1995-2003 Russell King
  *               2001-2002 Keith Owens
- *     
+ *
  * Generate definitions needed by assembly language modules.
  * This code generates raw asm output which is post-processed to extract
  * and format the required data.
@@ -22,6 +22,8 @@
 #include <asm/procinfo.h>
 #include <asm/hardware/cache-l2x0.h>
 #include <linux/kbuild.h>
+#include <linux/suspend.h>
+#include <asm/suspend.h>
 
 /*
  * Make sure that the compiler and target are compatible.
@@ -146,5 +148,20 @@ int main(void)
   DEFINE(DMA_BIDIRECTIONAL,	DMA_BIDIRECTIONAL);
   DEFINE(DMA_TO_DEVICE,		DMA_TO_DEVICE);
   DEFINE(DMA_FROM_DEVICE,	DMA_FROM_DEVICE);
-  return 0; 
+#ifdef CONFIG_HIBERNATION
+  BLANK();
+  DEFINE(PBE_ADDRESS, offsetof(struct pbe, address));
+  DEFINE(PBE_ORIG_ADDRESS, offsetof(struct pbe, orig_address));
+  DEFINE(PBE_NEXT, offsetof(struct pbe, next));
+  DEFINE(SAVED_CONTEXT_R0, offsetof(struct saved_context, r0));
+  DEFINE(SAVED_CONTEXT_USR, offsetof(struct saved_context, usr_sp));
+  DEFINE(SAVED_CONTEXT_SVR, offsetof(struct saved_context, svr_sp));
+  DEFINE(SAVED_CONTEXT_ABT, offsetof(struct saved_context, abt_sp));
+  DEFINE(SAVED_CONTEXT_IRQ, offsetof(struct saved_context, irq_sp));
+  DEFINE(SAVED_CONTEXT_UND, offsetof(struct saved_context, und_sp));
+  DEFINE(SAVED_CONTEXT_FIQ, offsetof(struct saved_context, fiq_sp));
+  DEFINE(SAVED_CONTEXT_CP15, offsetof(struct saved_context, cp15_control));
+#endif
+
+  return 0;
 }

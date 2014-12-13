@@ -949,7 +949,11 @@ static int mmc_sdio_resume(struct mmc_host *host)
 		}
 	}
 
+#if defined(CONFIG_TI_WL18XX)
+	if (!err && !mmc_card_keep_power(host) && host->sdio_irqs)
+#else
 	if (!err && host->sdio_irqs)
+#endif
 		wake_up_process(host->sdio_irq_thread);
 	mmc_release_host(host);
 

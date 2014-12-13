@@ -819,13 +819,22 @@ static void __init kuser_get_tls_init(unsigned long vectors)
 
 void __init early_trap_init(void *vectors_base)
 {
+#ifdef CONFIG_PLAT_AMBARELLA_BOSS
+	unsigned long vectors = CONFIG_VECTORS_BASE;
+	unsigned long *virt_vectors;
+#else
 	unsigned long vectors = (unsigned long)vectors_base;
+#endif
 	extern char __stubs_start[], __stubs_end[];
 	extern char __vectors_start[], __vectors_end[];
 	extern char __kuser_helper_start[], __kuser_helper_end[];
 	int kuser_sz = __kuser_helper_end - __kuser_helper_start;
 
+#ifdef CONFIG_PLAT_AMBARELLA_BOSS
+	vectors_page = (void *) CONFIG_VECTORS_BASE;
+#else
 	vectors_page = vectors_base;
+#endif
 
 	/*
 	 * Copy the vectors, stubs and kuser helpers (in entry-armv.S)

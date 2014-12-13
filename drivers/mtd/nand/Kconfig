@@ -49,6 +49,21 @@ config MTD_NAND_MUSEUM_IDS
 	  NAND chips (page size 256 byte, erase size 4-8KiB). The IDs
 	  of these chips were reused by later, larger chips.
 
+config MTD_NAND_AMBARELLA
+	tristate "Ambarella Media Soc NAND support"
+	depends on PLAT_AMBARELLA
+	select MTD_NAND_ECC_BCH
+	help
+	  This enables the SLC NAND flash controller on the Ambarella
+	  Media SoC.
+
+config MTD_NAND_AMBARELLA_SWECC
+	bool "Ambarella Media Soc NAND use software ECC"
+	depends on MTD_NAND_AMBARELLA
+	default n
+	help
+	  Ambarella nand using software ECC or software BCH.
+
 config MTD_NAND_DENALI
         tristate "Support Denali NAND controller"
         help

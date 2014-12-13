@@ -29,7 +29,9 @@
 /* set up by the platform code */
 static void __iomem *twd_base;
 
+#if defined(CONFIG_CLKDEV_LOOKUP)
 static struct clk *twd_clk;
+#endif
 static unsigned long twd_timer_rate;
 static bool common_setup_called;
 static DEFINE_PER_CPU(bool, percpu_setup_called);
@@ -239,6 +241,7 @@ static irqreturn_t twd_handler(int irq, void *dev_id)
 	return IRQ_NONE;
 }
 
+#if defined(CONFIG_CLKDEV_LOOKUP)
 static struct clk *twd_get_clock(void)
 {
 	struct clk *clk;
@@ -259,6 +262,7 @@ static struct clk *twd_get_clock(void)
 
 	return clk;
 }
+#endif
 
 /*
  * Setup the local clock events for a CPU.
@@ -285,6 +289,8 @@ static int __cpuinit twd_timer_setup(struct clock_event_device *clk)
 	 * during the runtime of the system.
 	 */
 	if (!common_setup_called) {
+#if defined(CONFIG_CLKDEV_LOOKUP)
+
 		twd_clk = twd_get_clock();
 
 		/*
@@ -296,6 +302,7 @@ static int __cpuinit twd_timer_setup(struct clock_event_device *clk)
 		if (!IS_ERR_OR_NULL(twd_clk))
 			twd_timer_rate = clk_get_rate(twd_clk);
 		else
+#endif
 			twd_calibrate_rate();
 
 		common_setup_called = true;

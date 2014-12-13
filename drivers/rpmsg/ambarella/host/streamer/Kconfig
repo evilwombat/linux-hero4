@@ -1,0 +1,5 @@
+config RPMSG_STREAMER
+	tristate "Streamer"
+	depends on RPMSG
+	help
+	  A sample of rpmsg program which streams A/V frames

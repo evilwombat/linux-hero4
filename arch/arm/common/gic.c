@@ -45,6 +45,11 @@
 #include <asm/mach/irq.h>
 #include <asm/hardware/gic.h>
 
+#ifdef CONFIG_PLAT_AMBARELLA_BOSS
+#include <plat/ambcache.h>
+#include <mach/boss.h>
+#endif
+
 union gic_base {
 	void __iomem *common_base;
 	void __percpu __iomem **percpu_base;
@@ -243,9 +248,13 @@ static int gic_set_affinity(struct irq_data *d, const struct cpumask *mask_val,
 {
 	void __iomem *reg = gic_dist_base(d) + GIC_DIST_TARGET + (gic_irq(d) & ~3);
 	unsigned int shift = (gic_irq(d) % 4) * 8;
-	unsigned int cpu = cpumask_any_and(mask_val, cpu_online_mask);
+	unsigned int cpu,cpu_mask = 0;
 	u32 val, mask, bit;
 
+	for_each_cpu_and(cpu, mask_val, cpu_online_mask)
+		cpu_mask |= 0x1 << cpu;
+	cpu_mask &= 0xff;
+	cpu = cpumask_any_and(mask_val, cpu_online_mask);
 	if (cpu >= NR_GIC_CPU_IF || cpu >= nr_cpu_ids)
 		return -EINVAL;
 
@@ -254,6 +263,7 @@ static int gic_set_affinity(struct irq_data *d, const struct cpumask *mask_val,
 
 	raw_spin_lock(&irq_controller_lock);
 	val = readl_relaxed(reg) & ~mask;
+	val |= (cpu_mask << shift);
 	writel_relaxed(val | bit, reg);
 	raw_spin_unlock(&irq_controller_lock);
 
@@ -283,13 +293,22 @@ asmlinkage void __exception_irq_entry gic_handle_irq(struct pt_regs *regs)
 	void __iomem *cpu_base = gic_data_cpu_base(gic);
 
 	do {
+#ifdef CONFIG_PLAT_AMBARELLA_BOSS
+		irqnr = *boss->irqno;
+#else
 		irqstat = readl_relaxed(cpu_base + GIC_CPU_INTACK);
 		irqnr = irqstat & ~0x1c00;
-
+#endif
 		if (likely(irqnr > 15 && irqnr < 1021)) {
 			irqnr = irq_find_mapping(gic->domain, irqnr);
 			handle_IRQ(irqnr, regs);
+#ifdef CONFIG_PLAT_AMBARELLA_BOSS
+			/* Linux will continue to process interrupt, */
+			/* but we must enter IRQ from AmbaBoss_Irq in BOSS system. */
+			break;
+#else
 			continue;
+#endif
 		}
 		if (irqnr < 16) {
 			writel_relaxed(irqstat, cpu_base + GIC_CPU_EOI);
@@ -372,6 +391,7 @@ static u8 gic_get_cpumask(struct gic_chip_data *gic)
 
 static void __init gic_dist_init(struct gic_chip_data *gic)
 {
+#ifndef CONFIG_PLAT_AMBARELLA_AMBALINK
 	unsigned int i;
 	u32 cpumask;
 	unsigned int gic_irqs = gic->gic_irqs;
@@ -408,12 +428,15 @@ static void __init gic_dist_init(struct gic_chip_data *gic)
 		writel_relaxed(0xffffffff, base + GIC_DIST_ENABLE_CLEAR + i * 4 / 32);
 
 	writel_relaxed(1, base + GIC_DIST_CTRL);
+#endif
 }
 
 static void __cpuinit gic_cpu_init(struct gic_chip_data *gic)
 {
+#ifndef CONFIG_PLAT_AMBARELLA_BOSS
 	void __iomem *dist_base = gic_data_dist_base(gic);
 	void __iomem *base = gic_data_cpu_base(gic);
+#endif
 	unsigned int cpu_mask, cpu = smp_processor_id();
 	int i;
 
@@ -432,6 +455,7 @@ static void __cpuinit gic_cpu_init(struct gic_chip_data *gic)
 		if (i != cpu)
 			gic_cpu_map[i] &= ~cpu_mask;
 
+#ifndef CONFIG_PLAT_AMBARELLA_BOSS
 	/*
 	 * Deal with the banked PPI and SGI interrupts - disable all
 	 * PPI interrupts, ensure all SGI interrupts are enabled.
@@ -447,6 +471,7 @@ static void __cpuinit gic_cpu_init(struct gic_chip_data *gic)
 
 	writel_relaxed(0xf0, base + GIC_CPU_PRIMASK);
 	writel_relaxed(1, base + GIC_CPU_CTRL);
+#endif
 }
 
 #ifdef CONFIG_CPU_PM
@@ -494,7 +519,9 @@ static void gic_dist_save(unsigned int gic_nr)
 static void gic_dist_restore(unsigned int gic_nr)
 {
 	unsigned int gic_irqs;
+#ifndef CONFIG_PLAT_AMBARELLA_AMBALINK
 	unsigned int i;
+#endif
 	void __iomem *dist_base;
 
 	if (gic_nr >= MAX_GIC_NR)
@@ -505,6 +532,9 @@ static void gic_dist_restore(unsigned int gic_nr)
 
 	if (!dist_base)
 		return;
+
+#ifndef CONFIG_PLAT_AMBARELLA_AMBALINK
+	/* already restore the distributor in gic_resume(). */
 
 	writel_relaxed(0, dist_base + GIC_DIST_CTRL);
 
@@ -525,6 +555,7 @@ static void gic_dist_restore(unsigned int gic_nr)
 			dist_base + GIC_DIST_ENABLE_SET + i * 4);
 
 	writel_relaxed(1, dist_base + GIC_DIST_CTRL);
+#endif
 }
 
 static void gic_cpu_save(unsigned int gic_nr)
@@ -765,6 +796,7 @@ void __init gic_init_bases(unsigned int gic_nr, int irq_start,
 		return;
 
 	gic_chip.flags |= gic_arch_extn.flags;
+
 	gic_dist_init(gic);
 	gic_cpu_init(gic);
 	gic_pm_init(gic);
@@ -828,5 +860,208 @@ int __init gic_of_init(struct device_node *node, struct device_node *parent)
 	}
 	gic_cnt++;
 	return 0;
+}
+#endif
+
+/* ==========================================================================*/
+struct gic_dist_info_s {
+	u32					gic_dist_ctrl;
+	u32					gic_dist_enable_set[32];
+	u32					gic_dist_pri[256];
+	u32					gic_dist_target[256];
+	u32					gic_dist_config[64];
+};
+struct gic_info_s {
+	u32					gic_cpu_ctrl;
+	u32					gic_cpu_primask;
+	u32					gic_cpu_binpoint;
+	struct gic_dist_info_s			gic_dist;
+};
+static struct gic_info_s gic_pm_info;
+
+u32 gic_suspend(u32 level)
+{
+	int					retval = 0;
+	u32					gic_irqs;
+	int					i;
+
+	struct gic_chip_data *gic = &gic_data[0];
+	void __iomem *cpu_base = gic_data_cpu_base(gic);
+	void __iomem *dist_base = gic_data_dist_base(gic);
+
+//	cpu_base = gic_data[0].cpu_base;
+//	dist_base = gic_data[0].dist_base;
+	if ((cpu_base == NULL) || (dist_base == NULL))
+		goto gic_dist_pm_exit;
+
+	gic_irqs = readl_relaxed(dist_base + GIC_DIST_CTR) & 0x1f;
+	gic_irqs = (gic_irqs + 1) * 32;
+	if (gic_irqs > 1020)
+		gic_irqs = 1020;
+
+	gic_pm_info.gic_cpu_ctrl = readl_relaxed(cpu_base + GIC_CPU_CTRL);
+	gic_pm_info.gic_cpu_primask = readl_relaxed(cpu_base + GIC_CPU_PRIMASK);
+	gic_pm_info.gic_cpu_binpoint = readl_relaxed(cpu_base + GIC_CPU_BINPOINT);
+
+	gic_pm_info.gic_dist.gic_dist_ctrl = readl_relaxed(dist_base + GIC_DIST_CTRL);
+	for (i = 0; i < gic_irqs; i += 32)
+		gic_pm_info.gic_dist.gic_dist_enable_set[i / 32] = readl_relaxed(dist_base + GIC_DIST_ENABLE_SET + i * 4 / 32);
+	for (i = 0; i < gic_irqs; i += 4) {
+		gic_pm_info.gic_dist.gic_dist_pri[i / 4] = readl_relaxed(dist_base + GIC_DIST_PRI + i * 4 / 4);
+		gic_pm_info.gic_dist.gic_dist_target[i / 4] = readl_relaxed(dist_base + GIC_DIST_TARGET + i * 4 / 4);
+	}
+	for (i = 0; i < gic_irqs; i += 16)
+		gic_pm_info.gic_dist.gic_dist_config[i / 16] = readl_relaxed(dist_base + GIC_DIST_CONFIG + i * 4 / 16);
+
+gic_dist_pm_exit:
+	return retval;
+}
+
+#if 1
+extern u32 gic_resume_mask[32];
+
+u32 gic_resume(u32 level)
+{
+	int					retval = 0;
+	u32					gic_irqs;
+	int					i;
+
+	struct gic_chip_data *gic = &gic_data[0];
+	void __iomem *cpu_base = gic_data_cpu_base(gic);
+	void __iomem *dist_base = gic_data_dist_base(gic);
+
+//	cpu_base = gic_data[0].cpu_base;
+//	dist_base = gic_data[0].dist_base;
+	if ((cpu_base == NULL) || (dist_base == NULL))
+		goto gic_dist_pm_exit;
+
+	gic_irqs = readl_relaxed(dist_base + GIC_DIST_CTR) & 0x1f;
+	gic_irqs = (gic_irqs + 1) * 32;
+	if (gic_irqs > 1020)
+		gic_irqs = 1020;
+
+	writel_relaxed(0, dist_base + GIC_DIST_CTRL);
+	for (i = 0; i < gic_irqs; i += 16)
+		writel_relaxed(gic_pm_info.gic_dist.gic_dist_config[i / 16], dist_base + GIC_DIST_CONFIG + i * 4 / 16);
+	for (i = 0; i < gic_irqs; i += 4) {
+		writel_relaxed(gic_pm_info.gic_dist.gic_dist_pri[i / 4], dist_base + GIC_DIST_PRI + i * 4 / 4);
+#ifndef CONFIG_PLAT_AMBARELLA_AMBALINK
+		writel_relaxed(gic_pm_info.gic_dist.gic_dist_target[i / 4], dist_base + GIC_DIST_TARGET + i * 4 / 4);
+	}
+#else
+	}
+	// only restore Timer 8
+	writel_relaxed(gic_pm_info.gic_dist.gic_dist_target[0x8c / 4], dist_base + GIC_DIST_TARGET + 0x8c * 4 / 4);
+
+	/* Force to enable NAND cmd_irq/dma_irq and fdma_irq. GIC ID: 48 49 65 */
+	gic_pm_info.gic_dist.gic_dist_enable_set[1] |= 0x30000;
+	gic_pm_info.gic_dist.gic_dist_enable_set[2] |= 0x2;
+#endif
+
+	for (i = 0; i < gic_irqs; i += 32) {
+#ifndef CONFIG_PLAT_AMBARELLA_AMBALINK
+		writel_relaxed(0xFFFFFFFF, dist_base + GIC_DIST_ENABLE_CLEAR + i * 4 / 32);
+		writel_relaxed(gic_pm_info.gic_dist.gic_dist_enable_set[i / 32], dist_base + GIC_DIST_ENABLE_SET + i * 4 / 32);
+#else
+		writel_relaxed((gic_pm_info.gic_dist.gic_dist_enable_set[i / 32] & gic_resume_mask[i / 32]),
+				dist_base + GIC_DIST_ENABLE_SET + i * 4 / 32);
+#endif
+	}
+
+	writel_relaxed(gic_pm_info.gic_cpu_primask, cpu_base + GIC_CPU_PRIMASK);
+	writel_relaxed(gic_pm_info.gic_cpu_binpoint, cpu_base + GIC_CPU_BINPOINT);
+	writel_relaxed(gic_pm_info.gic_cpu_ctrl, cpu_base + GIC_CPU_CTRL);
+
+	writel_relaxed(gic_pm_info.gic_dist.gic_dist_ctrl , dist_base + GIC_DIST_CTRL);
+
+gic_dist_pm_exit:
+	return retval;
+}
+#else
+/* debug version. Print out the changed value to be updated this time. */
+u32 gic_resume(u32 level)
+{
+	int					retval = 0;
+	u32					gic_irqs, val;
+	int					i;
+
+	struct gic_chip_data *gic = &gic_data[0];
+	void __iomem *cpu_base = gic_data_cpu_base(gic);
+	void __iomem *dist_base = gic_data_dist_base(gic);
+
+//	cpu_base = gic_data[0].cpu_base;
+//	dist_base = gic_data[0].dist_base;
+	if ((cpu_base == NULL) || (dist_base == NULL))
+		goto gic_dist_pm_exit;
+
+	gic_irqs = readl_relaxed(dist_base + GIC_DIST_CTR) & 0x1f;
+	gic_irqs = (gic_irqs + 1) * 32;
+	if (gic_irqs > 1020)
+		gic_irqs = 1020;
+
+	writel_relaxed(0, dist_base + GIC_DIST_CTRL);
+	for (i = 0; i < gic_irqs; i += 16) {
+		val = readl_relaxed(dist_base + GIC_DIST_CONFIG + i * 4 / 16);
+		if (val != gic_pm_info.gic_dist.gic_dist_config[i / 16]) {
+			printk("########## write gic_dist_config: addr = 0x%x, old = 0x%x, new = 0x%x\n",
+				dist_base + GIC_DIST_CONFIG + i * 4 / 16, val, gic_pm_info.gic_dist.gic_dist_config[i / 16]);
+			writel_relaxed(gic_pm_info.gic_dist.gic_dist_config[i / 16], dist_base + GIC_DIST_CONFIG + i * 4 / 16);
+		}
+	}
+	for (i = 0; i < gic_irqs; i += 4) {
+		val = readl_relaxed(dist_base + GIC_DIST_PRI + i * 4 / 4);
+		if (val != gic_pm_info.gic_dist.gic_dist_pri[i / 4]) {
+			printk("########## write gic_dist_pri: addr = 0x%x, old = 0x%x, new = 0x%x\n",
+				dist_base + GIC_DIST_PRI + i * 4 / 4, val, gic_pm_info.gic_dist.gic_dist_pri[i / 4]);
+			writel_relaxed(gic_pm_info.gic_dist.gic_dist_pri[i / 4], dist_base + GIC_DIST_PRI + i * 4 / 4);
+		}
+
+#ifndef CONFIG_PLAT_AMBARELLA_AMBALINK
+		writel_relaxed(gic_pm_info.gic_dist.gic_dist_target[i / 4], dist_base + GIC_DIST_TARGET + i * 4 / 4);
+	}
+
+	/* Force to enable NAND cmd_irq/dma_irq and fdma_irq. GIC ID: 48 49 65 */
+	gic_pm_info.gic_dist.gic_dist_enable_set[1] |= 0x30000;
+	gic_pm_info.gic_dist.gic_dist_enable_set[2] |= 0x2;
+#else
+	}
+	// only restore Timer 8
+	val = readl_relaxed(dist_base + GIC_DIST_TARGET + 0x8c * 4 / 4);
+	if (val != gic_pm_info.gic_dist.gic_dist_target[0x8c / 4]) {
+		printk("########## write gic_dist_target: addr = 0x%x, old = 0x%x, new = 0x%x\n",
+			dist_base + GIC_DIST_TARGET + 0x8c * 4 / 4, val, gic_pm_info.gic_dist.gic_dist_target[0x8c / 4]);
+		writel_relaxed(gic_pm_info.gic_dist.gic_dist_target[0x8c / 4], dist_base + GIC_DIST_TARGET + 0x8c * 4 / 4);
+	}
+
+#endif
+	for (i = 0; i < gic_irqs; i += 32) {
+		val = readl_relaxed(dist_base + GIC_DIST_ENABLE_SET + i * 4 / 32);
+		if (val != gic_pm_info.gic_dist.gic_dist_enable_set[i / 32]) {
+			printk("########## write gic_dist_enable_set: addr = 0x%x, old = 0x%x, new = 0x%x\n",
+				dist_base + GIC_DIST_ENABLE_SET + i * 4 / 32, val, gic_pm_info.gic_dist.gic_dist_enable_set[i / 32]);
+
+			writel_relaxed(0xFFFFFFFF, dist_base + GIC_DIST_ENABLE_CLEAR + i * 4 / 32);
+			writel_relaxed(gic_pm_info.gic_dist.gic_dist_enable_set[i / 32], dist_base + GIC_DIST_ENABLE_SET + i * 4 / 32);
+		}
+	}
+
+	val = readl_relaxed(cpu_base + GIC_CPU_PRIMASK);
+	printk("########## write gic_cpu_primask: old = 0x%x, new = 0x%x\n", val, gic_pm_info.gic_cpu_primask);
+	writel_relaxed(gic_pm_info.gic_cpu_primask, cpu_base + GIC_CPU_PRIMASK);
+
+	val = readl_relaxed(cpu_base + GIC_CPU_BINPOINT);
+	printk("########## write gic_cpu_binpoint: old = 0x%x, new = 0x%x\n", val, gic_pm_info.gic_cpu_binpoint);
+	writel_relaxed(gic_pm_info.gic_cpu_binpoint, cpu_base + GIC_CPU_BINPOINT);
+
+	val = readl_relaxed(cpu_base + GIC_CPU_CTRL);
+	printk("########## write gic_cpu_ctrl: old = 0x%x, new = 0x%x\n", val, gic_pm_info.gic_cpu_ctrl);
+	writel_relaxed(gic_pm_info.gic_cpu_ctrl, cpu_base + GIC_CPU_CTRL);
+
+	val = readl_relaxed(cpu_base + GIC_DIST_CTRL);
+	printk("########## write gic_dist_ctrl: old = 0x%x, new = 0x%x\n", val, gic_pm_info.gic_dist.gic_dist_ctrl);
+	writel_relaxed(gic_pm_info.gic_dist.gic_dist_ctrl , dist_base + GIC_DIST_CTRL);
+
+gic_dist_pm_exit:
+	return retval;
 }
 #endif

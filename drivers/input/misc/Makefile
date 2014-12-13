@@ -13,6 +13,16 @@ obj-$(CONFIG_INPUT_AD714X_SPI)		+= ad714x-spi.o
 obj-$(CONFIG_INPUT_ADXL34X)		+= adxl34x.o
 obj-$(CONFIG_INPUT_ADXL34X_I2C)		+= adxl34x-i2c.o
 obj-$(CONFIG_INPUT_ADXL34X_SPI)		+= adxl34x-spi.o
+
+ambarella_general_input-objs		:= ambarella_input.o
+ifeq ($(CONFIG_INPUT_AMBARELLA_IR), y)
+ambarella_general_input-objs		+= ambarella_input_ir.o
+endif
+ifeq ($(CONFIG_INPUT_AMBARELLA_ADC), y)
+ambarella_general_input-objs		+= ambarella_input_adc.o
+endif
+obj-$(CONFIG_INPUT_AMBARELLA)		:= ambarella_general_input.o
+
 obj-$(CONFIG_INPUT_APANEL)		+= apanel.o
 obj-$(CONFIG_INPUT_ARIZONA_HAPTICS)	+= arizona-haptics.o
 obj-$(CONFIG_INPUT_ATI_REMOTE2)		+= ati_remote2.o

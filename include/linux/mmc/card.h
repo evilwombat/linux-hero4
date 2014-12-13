@@ -276,6 +276,9 @@ struct mmc_card {
 	unsigned int		sd_bus_speed;	/* Bus Speed Mode set for the card */
 
 	struct dentry		*debugfs_root;
+#if defined(CONFIG_TI_WL18XX)
+	unsigned char		pending_int;	/* pending sdio interrupts */
+#endif
 	struct mmc_part	part[MMC_NUM_PHY_PARTITION]; /* physical partitions */
 	unsigned int    nr_parts;
 };

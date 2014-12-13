@@ -21,10 +21,13 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_ADAU1373 if I2C
 	select SND_SOC_ADAV80X
 	select SND_SOC_ADS117X
+	select SND_SOC_AMBARELLA_A2AUC
+	select SND_SOC_AMBARELLA_DUMMY
 	select SND_SOC_AK4104 if SPI_MASTER
 	select SND_SOC_AK4535 if I2C
 	select SND_SOC_AK4641 if I2C
 	select SND_SOC_AK4642 if I2C
+	select SND_SOC_AK4642_AMB if I2C
 	select SND_SOC_AK4671 if I2C
 	select SND_SOC_ALC5623 if I2C
 	select SND_SOC_ALC5632 if I2C
@@ -39,6 +42,7 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_DA732X if I2C
 	select SND_SOC_DA9055 if I2C
 	select SND_SOC_DFBMCS320
+	select SND_SOC_ES8328 if I2C
 	select SND_SOC_ISABELLE if I2C
 	select SND_SOC_JZ4740_CODEC
 	select SND_SOC_LM4857 if I2C
@@ -187,6 +191,13 @@ config SND_SOC_ADAV80X
 config SND_SOC_ADS117X
 	tristate
 
+
+config SND_SOC_AMBARELLA_A2AUC
+	tristate
+
+config SND_SOC_AMBARELLA_DUMMY
+	tristate
+
 config SND_SOC_AK4104
 	tristate
 
@@ -197,6 +208,9 @@ config SND_SOC_AK4641
 	tristate
 
 config SND_SOC_AK4642
+	tristate
+
+config SND_SOC_AK4642_AMB
 	tristate
 
 config SND_SOC_AK4671
@@ -257,6 +271,9 @@ config SND_SOC_DFBMCS320
 	tristate
 
 config SND_SOC_DMIC
+	tristate
+
+config SND_SOC_ES8328
 	tristate
 
 config SND_SOC_ISABELLE

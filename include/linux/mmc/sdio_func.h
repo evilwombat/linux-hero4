@@ -39,6 +39,9 @@ struct sdio_func {
 	struct mmc_card		*card;		/* the card this device belongs to */
 	struct device		dev;		/* the device */
 	sdio_irq_handler_t	*irq_handler;	/* IRQ callback */
+#if defined(CONFIG_TI_WL18XX)
+	sdio_irq_handler_t	*irq_handler_ll;/* IRQ callback, called with the host unclaimed */
+#endif
 	unsigned int		num;		/* function number */
 
 	unsigned char		class;		/* standard interface class */
@@ -117,6 +120,9 @@ extern void sdio_unregister_driver(struct sdio_driver *);
  * SDIO I/O operations
  */
 extern void sdio_claim_host(struct sdio_func *func);
+#if defined(CONFIG_TI_WL18XX)
+extern int sdio_claim_host_irq(struct sdio_func *func);
+#endif
 extern void sdio_release_host(struct sdio_func *func);
 
 extern int sdio_enable_func(struct sdio_func *func);
@@ -125,7 +131,16 @@ extern int sdio_disable_func(struct sdio_func *func);
 extern int sdio_set_block_size(struct sdio_func *func, unsigned blksz);
 
 extern int sdio_claim_irq(struct sdio_func *func, sdio_irq_handler_t *handler);
+#if defined(CONFIG_TI_WL18XX)
+extern int sdio_claim_irq_lockless(struct sdio_func *func,
+				   sdio_irq_handler_t *handler);
+#endif
 extern int sdio_release_irq(struct sdio_func *func);
+#if defined(CONFIG_TI_WL18XX)
+extern int sdio_enable_irq(struct sdio_func *func);
+extern int sdio_disable_irq(struct sdio_func *func);
+extern int sdio_flush_irq(struct sdio_func *func);
+#endif
 
 extern unsigned int sdio_align_size(struct sdio_func *func, unsigned int sz);
 

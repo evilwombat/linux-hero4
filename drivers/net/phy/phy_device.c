@@ -918,6 +918,9 @@ static int genphy_config_init(struct phy_device *phydev)
 	int val;
 	u32 features;
 
+	/* Make sure PHY is ON */
+	genphy_resume(phydev);
+
 	/* For now, I'll claim that the generic driver supports
 	 * all possible port types */
 	features = (SUPPORTED_TP | SUPPORTED_MII
@@ -959,6 +962,7 @@ static int genphy_config_init(struct phy_device *phydev)
 
 	return 0;
 }
+
 int genphy_suspend(struct phy_device *phydev)
 {
 	int value;

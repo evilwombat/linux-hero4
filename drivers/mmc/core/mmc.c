@@ -1290,6 +1290,7 @@ err:
 	return err;
 }
 
+#if !defined(CONFIG_RPMSG_SD)
 static int mmc_can_poweroff_notify(const struct mmc_card *card)
 {
 	return card &&
@@ -1318,6 +1319,7 @@ static int mmc_poweroff_notify(struct mmc_card *card, unsigned int notify_type)
 
 	return err;
 }
+#endif
 
 /*
  * Host is being removed. Free up the current card.
@@ -1378,6 +1380,7 @@ static int mmc_suspend(struct mmc_host *host)
 	BUG_ON(!host);
 	BUG_ON(!host->card);
 
+#if !defined(CONFIG_RPMSG_SD)
 	mmc_claim_host(host);
 	if (mmc_can_poweroff_notify(host->card))
 		err = mmc_poweroff_notify(host->card, EXT_CSD_POWER_OFF_SHORT);
@@ -1387,6 +1390,7 @@ static int mmc_suspend(struct mmc_host *host)
 		err = mmc_deselect_cards(host);
 	host->card->state &= ~(MMC_STATE_HIGHSPEED | MMC_STATE_HIGHSPEED_200);
 	mmc_release_host(host);
+#endif
 
 	return err;
 }
@@ -1399,14 +1403,16 @@ static int mmc_suspend(struct mmc_host *host)
  */
 static int mmc_resume(struct mmc_host *host)
 {
-	int err;
+	int err = 0;
 
 	BUG_ON(!host);
 	BUG_ON(!host->card);
 
+#if !defined(CONFIG_RPMSG_SD)
 	mmc_claim_host(host);
 	err = mmc_init_card(host, host->ocr, host->card);
 	mmc_release_host(host);
+#endif
 
 	return err;
 }

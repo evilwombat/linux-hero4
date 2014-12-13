@@ -283,10 +283,14 @@ void flush_dcache_page(struct page *page)
 
 	mapping = page_mapping(page);
 
+#ifndef CONFIG_PLAT_AMBARELLA_AMBALINK
 	if (!cache_ops_need_broadcast() &&
 	    mapping && !mapping_mapped(mapping))
 		clear_bit(PG_dcache_clean, &page->flags);
 	else {
+#else
+	{
+#endif
 		__flush_dcache_page(mapping, page);
 		if (mapping && cache_is_vivt())
 			__flush_dcache_aliases(mapping, page);

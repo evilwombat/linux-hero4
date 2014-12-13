@@ -351,6 +351,11 @@ struct mmc_host *mmc_alloc_host(int extra, struct device *dev)
 	host->max_blk_size = 512;
 	host->max_blk_count = PAGE_CACHE_SIZE / 512;
 
+#if defined(CONFIG_TI_WL18XX)
+	spin_lock_init(&host->sdio_irq_running_lock);
+	init_waitqueue_head(&host->sdio_wq);
+#endif
+
 	return host;
 
 free:

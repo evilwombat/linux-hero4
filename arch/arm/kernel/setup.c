@@ -726,6 +726,17 @@ void __init hyp_mode_check(void)
 #endif
 }
 
+#ifdef CONFIG_PLAT_AMBARELLA_BOSS
+static inline u32 read_tlb_base(void)
+{
+	u32 u;
+
+	__asm__("mrc p15, 0, %0, c2, c0, 0" : "=r" (u));
+
+	return u;
+}
+#endif	/* CONFIG_PLAT_AMBARELLA_BOSS */
+
 void __init setup_arch(char **cmdline_p)
 {
 	struct machine_desc *mdesc;
@@ -746,6 +757,9 @@ void __init setup_arch(char **cmdline_p)
 	init_mm.end_code   = (unsigned long) _etext;
 	init_mm.end_data   = (unsigned long) _edata;
 	init_mm.brk	   = (unsigned long) _end;
+#ifdef CONFIG_PLAT_AMBARELLA_BOSS
+	init_mm.pgd	   = (pgd_t *)phys_to_virt(read_tlb_base());
+#endif
 
 	/* populate cmd_line too for later use, preserving boot_command_line */
 	strlcpy(cmd_line, boot_command_line, COMMAND_LINE_SIZE);

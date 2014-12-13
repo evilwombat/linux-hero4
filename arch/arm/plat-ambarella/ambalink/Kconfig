@@ -1,0 +1,83 @@
+menuconfig PLAT_AMBARELLA_AMBALINK
+	bool "AmbaLink Support"
+	default n
+
+if PLAT_AMBARELLA_AMBALINK
+choice
+	prompt "Link Topology"
+config AMBALINK_SINGLE_CORE
+	bool "Uni_Core"
+	select PLAT_AMBARELLA_BOSS
+	help 
+	  AmbaLink on uni-core platform
+
+config AMBALINK_MULTIPLE_CORE
+	bool "Multi_Core"
+	select PLAT_AMBARELLA_PPM_UNCACHED
+	help
+	  AmbaLink on multiple-core (dual-core Cortex) platform
+
+config AMBALINK_AMP_MULTIPLE_CORE
+	bool "AMP_Multi_Core"
+	select PLAT_AMBARELLA_PPM_UNCACHED
+	help
+	  AmbaLink on AMP multiple-core (ARM11 + Cortex) platform
+endchoice #"Ambalink Topology"
+
+config PLAT_AMBARELLA_BOSS
+	bool "Ambarella BOSS"
+	default n
+	depends on AMBALINK_SINGLE_CORE
+	help
+	  Enable single core BOSS support.
+
+config AMBALINK_SHMADDR
+	hex "shared memory address"
+	default 0x00000000
+	help
+	  Specify the starting address for Ambalink shared memory
+
+config AMBALINK_LOCK
+	bool "Amba Global Locks"
+       	default y
+       	help
+	  Ambalink global spin-lock and mutex
+
+config AMBALINK_RPC
+	bool "Amba RPC support"
+	depends on RPMSG
+	default y
+	depends on RPROC_SUPPORT
+	help 
+	  Amblink Remote Procedure Call
+
+config AMBALINK_RFS
+	bool "Amba Ramfs server"
+	depends on RPMSG
+	default y
+	help
+	  Enable RTOS to read/write ramfs through RPMSG
+
+config RPMSG_SD
+	tristate "Amba SD card control"
+	depends on RPMSG
+	select AMBARELLA_IPC_LOCK
+	help
+	  SD controller RPMSG host driver.
+
+config RPMSG_CLK
+	tristate "Amba Clock"
+	depends on RPMSG
+	help
+	  Ambarella clock RPMSG host driver.
+
+config RPMSG_LINKCTRL
+	tristate "Amba Link Control"
+	depends on RPMSG
+	help
+	  A rpmsg server to handle the message between client and server for 
+	  control purpose, such as suspend, resume.
+
+source "arch/arm/plat-ambarella/ambalink/ambafs/Kconfig"
+
+endif #PLAT_AMBARELLA_AMBALINK

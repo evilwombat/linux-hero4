@@ -20,6 +20,10 @@
 
 DEFINE_MUTEX(pm_mutex);
 
+/* whether we are entering SR mode */
+int wowlan_resume_from_ram = 0;
+EXPORT_SYMBOL(wowlan_resume_from_ram);
+
 #ifdef CONFIG_PM_SLEEP
 
 /* Routines for PM-transition notifications */
@@ -323,17 +327,64 @@ static suspend_state_t decode_state(const char *buf, size_t n)
 	len = p ? p - buf : n;
 
 	/* Check hibernation first. */
-	if (len == 4 && !strncmp(buf, "disk", len))
+	if (len == 4 && !strncmp(buf, "disk", len)) {
+#ifdef CONFIG_PLAT_AMBARELLA_AMBALINK
+		/* Suspend to NAND. */
+		wowlan_resume_from_ram = 0;
+#endif
 		return PM_SUSPEND_MAX;
+	}
+#ifdef CONFIG_PLAT_AMBARELLA_AMBALINK
+	else if (!strncmp(buf, "sr", len)) {
+		/* Self refresh from ram. */
+		wowlan_resume_from_ram = 1;
+		return PM_SUSPEND_MAX;
+	}
+#endif
 
 #ifdef CONFIG_SUSPEND
 	for (s = &pm_states[state]; state < PM_SUSPEND_MAX; s++, state++)
-		if (*s && len == strlen(*s) && !strncmp(buf, *s, len))
+		if (*s && len == strlen(*s) && !strncmp(buf, *s, len)) {
+			if (state == PM_SUSPEND_STANDBY)
+				wowlan_resume_from_ram = 2;
+			else if (state == PM_SUSPEND_MEM)
+				wowlan_resume_from_ram = 3;
+
 			return state;
+		}
 #endif
 
 	return PM_SUSPEND_ON;
 }
+
+#ifdef CONFIG_PLAT_AMBARELLA_AMBALINK
+int amba_state_store(void *suspend_to)
+{
+	int error;
+
+	error = pm_autosleep_lock();
+	if (error)
+		return error;
+
+	if (pm_autosleep_state() > PM_SUSPEND_ON) {
+		error = -EBUSY;
+		goto out;
+	}
+
+	wowlan_resume_from_ram = (u32) suspend_to;
+
+	if (wowlan_resume_from_ram == 2)
+		error = pm_suspend(PM_SUSPEND_STANDBY);
+	else if (wowlan_resume_from_ram == 3)
+		error = pm_suspend(PM_SUSPEND_MEM);
+	else
+	error = hibernate();
+
+ out:
+	pm_autosleep_unlock();
+	return error;
+}
+#endif
 
 static ssize_t state_store(struct kobject *kobj, struct kobj_attribute *attr,
 			   const char *buf, size_t n)

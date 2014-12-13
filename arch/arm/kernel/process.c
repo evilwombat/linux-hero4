@@ -39,6 +39,10 @@
 #include <asm/thread_notify.h>
 #include <asm/stacktrace.h>
 #include <asm/mach/time.h>
+#if defined(CONFIG_PLAT_AMBARELLA_BOSS)
+#include <mach/system.h>
+#include <mach/boss.h>
+#endif
 
 #ifdef CONFIG_CC_STACKPROTECTOR
 #include <linux/stackprotector.h>
@@ -160,8 +164,11 @@ EXPORT_SYMBOL_GPL(arm_pm_restart);
 /*
  * This is our default idle handler.
  */
-
+#ifdef CONFIG_PLAT_AMBARELLA_BOSS
+void (*arm_pm_idle)(void) = arch_idle;
+#else
 void (*arm_pm_idle)(void);
+#endif
 
 static void default_idle(void)
 {
@@ -195,12 +202,16 @@ void cpu_idle(void)
 			if (cpu_is_offline(smp_processor_id()))
 				cpu_die();
 #endif
-
-			/*
-			 * We need to disable interrupts here
-			 * to ensure we don't miss a wakeup call.
-			 */
-			local_irq_disable();
+#if defined(CONFIG_PLAT_AMBARELLA_BOSS)
+			if (BOSS_STATE_TURBO == boss->state)
+				arm_irq_disable();
+			else
+#endif
+				/*
+				 * We need to disable interrupts here
+				 * to ensure we don't miss a wakeup call.
+				 */
+				local_irq_disable();
 #ifdef CONFIG_PL310_ERRATA_769419
 			wmb();
 #endif
@@ -220,6 +231,11 @@ void cpu_idle(void)
 			} else
 				local_irq_enable();
 		}
+#if defined(CONFIG_PLAT_AMBARELLA_BOSS)
+		if (boss) {
+			*boss->gidle = 0;
+		}
+#endif
 		ledtrig_cpu(CPU_LED_IDLE_END);
 		rcu_idle_exit();
 		tick_nohz_idle_exit();

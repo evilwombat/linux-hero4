@@ -19,6 +19,10 @@
 #include <linux/mmc/core.h>
 #include <linux/mmc/pm.h>
 
+#if defined(CONFIG_RPMSG_SD)
+#include <linux/aipc/rpmsg_sd.h>
+#endif
+
 struct mmc_ios {
 	unsigned int	clock;			/* clock rate */
 	unsigned short	vdd;
@@ -317,6 +321,12 @@ struct mmc_host {
 	bool			sdio_irq_pending;
 	atomic_t		sdio_irq_thread_abort;
 
+#if defined(CONFIG_TI_WL18XX)
+	spinlock_t		sdio_irq_running_lock;
+	bool			sdio_irq_running;
+	wait_queue_head_t	sdio_wq;
+#endif
+
 	mmc_pm_flag_t		pm_flags;	/* requested pm features */
 
 #ifdef CONFIG_LEDS_TRIGGERS
@@ -370,8 +380,18 @@ extern int mmc_cache_ctrl(struct mmc_host *, u8);
 
 static inline void mmc_signal_sdio_irq(struct mmc_host *host)
 {
+#if defined(CONFIG_TI_WL18XX)
+	unsigned long flags;
+#endif
+
 	host->ops->enable_sdio_irq(host, 0);
+#if defined(CONFIG_TI_WL18XX)
+	spin_lock_irqsave(&host->sdio_irq_running_lock, flags);
+	host->sdio_irq_running = true;
+	spin_unlock_irqrestore(&host->sdio_irq_running_lock, flags);
+#else
 	host->sdio_irq_pending = true;
+#endif
 	wake_up_process(host->sdio_irq_thread);
 }
 
@@ -453,4 +473,12 @@ static inline unsigned int mmc_host_clk_rate(struct mmc_host *host)
 	return host->ios.clock;
 }
 #endif
+
+#if defined(CONFIG_RPMSG_SD)
+extern struct rpdev_sdinfo *ambarella_sd_sdinfo_get(struct mmc_host *mmc);
+extern int ambarella_sd_rpmsg_cmd_send(struct mmc_host *mmc, struct mmc_command *cmd);
+extern int ambarella_sd_rpmsg_sdinfo_init(struct mmc_host *mmc);
+extern void ambarella_sd_rpmsg_sdinfo_en(struct mmc_host *mmc, u8 enable);
+#endif
+
 #endif /* LINUX_MMC_HOST_H */

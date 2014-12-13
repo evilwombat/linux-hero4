@@ -12,4 +12,19 @@ source "drivers/net/wireless/ti/wl18xx/Kconfig"
 
 # keep last for automatic dependencies
 source "drivers/net/wireless/ti/wlcore/Kconfig"
+
+comment "Set WL18XX, WLCORE, WLCORE_SDIO, WL12XX_PLATFORM_DATA as m to choose WL18XX in-band."
+	depends on !(WL18XX=m && WLCORE=m && WLCORE_SDIO=m && WL12XX_PLATFORM_DATA)
+
+config TI_WL18XX
+	bool "TI wl18xx compat-wireless driver"
+	depends on MMC
+	depends on WL18XX=m && WLCORE=m && WLCORE_SDIO=m && WL12XX_PLATFORM_DATA
+	default n
+	---help---
+	  TI patches for wl18xx driver with in-band SDIO ISR.
+	  wl18xx driver will be built by compat-wireless.
+	  Note: Official kernel configuration setting is named as WL18XX.
+
+
 endif # WL_TI

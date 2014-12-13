@@ -1,0 +1,7 @@
+config AMBALINK_VFS
+	tristate "Amba Virutal File System"
+	depends on RPMSG
+	default m
+	help
+	  Enable Linux to read/write RTOS native FS"
+

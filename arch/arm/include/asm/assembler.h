@@ -23,6 +23,11 @@
 #include <asm/ptrace.h>
 #include <asm/domain.h>
 #include <asm/opcodes-virt.h>
+#ifdef CONFIG_PLAT_AMBARELLA_BOSS
+#define __ASM__
+#include <mach/hardware.h>
+#include <mach/boss.h>
+#endif
 
 #define IOMEM(x)	(x)
 
@@ -83,12 +88,81 @@
 #if __LINUX_ARM_ARCH__ >= 6
 	.macro	disable_irq_notrace
 	cpsid	i
+#if defined(CONFIG_PLAT_AMBARELLA_BOSS)
+#if defined(CONFIG_ARM_GIC)
+	stmfd   sp!, {r0-r3}
+
+	ldr     r0, =boss
+	ldr     r0, [r0]
+
+	mov     r3, #0
+1:
+	mov     r2, #BOSS_GIC0MASK_OFFSET
+	add     r2, r2, r3
+	ldr     r1, [r0, r2]
+	mov     r2, #BOSS_GUEST_GIC0_EN_OFFSET
+	add     r2, r2, r3
+	ldr     r2, [r0, r2]
+	and     r1, r1, r2
+
+	ldr     r2, =AMBARELLA_VA_GIC_DIST_BASE
+	orr     r2, r2, #GIC_CLEAR_ENABLE_OFFSET
+	str     r1, [r2, r3]
+
+	add     r3, r3, #4
+	cmp     r3, #32
+	bne     1b
+
+	mov     r1, #1
+	str     r1, [r0, #BOSS_GUEST_IRQ_MASK_OFFSET]
+
+	ldmfd   sp!, {r0-r3}
+#else
+	/* VIC version... */
+#endif	/* CONFIG_ARM_GIC */
+#endif	/* CONFIG_PLAT_AMBARELLA_BOSS */
 	.endm
 
 	.macro	enable_irq_notrace
+#if defined(CONFIG_PLAT_AMBARELLA_BOSS)
+#if defined(CONFIG_ARM_GIC)
+	cpsid	i
+
+	stmfd   sp!, {r0-r3}
+
+	ldr     r0, =boss
+	ldr     r0, [r0]
+
+	mov     r3, #0
+1:
+	mov     r2, #BOSS_GIC0MASK_OFFSET
+	add     r2, r2, r3
+	ldr     r1, [r0, r2]
+	mov     r2, #BOSS_GUEST_GIC0_EN_OFFSET
+
+	add     r2, r2, r3
+	ldr     r2, [r0, r2]
+	and     r1, r1, r2
+
+	ldr     r2, =AMBARELLA_VA_GIC_DIST_BASE
+	orr     r2, r2, #GIC_SET_ENABLE_OFFSET
+	str     r1, [r2, r3]
+
+	add     r3, r3, #4
+	cmp     r3, #32
+	bne     1b
+
+	mov     r1, #0
+	str     r1, [r0, #BOSS_GUEST_IRQ_MASK_OFFSET]
+
+	ldmfd   sp!, {r0-r3}
+#else
+	/* VIC version... */
+#endif	/* CONFIG_ARM_GIC */
+#endif	/* CONFIG_PLAT_AMBARELLA_BOSS */
 	cpsie	i
 	.endm
-#else
+#else	/* __LINUX_ARM_ARCH__ < 6 */
 	.macro	disable_irq_notrace
 	msr	cpsr_c, #PSR_I_BIT | SVC_MODE
 	.endm

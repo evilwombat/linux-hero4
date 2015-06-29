@@ -103,6 +103,7 @@ static struct platform_device hero4_leds = {
 
 static struct platform_device *ambarella_devices[] __initdata = {
 	&hero4_leds,
+	&ambarella_uart3,
 	&ambarella_adc0,
 #ifdef CONFIG_PLAT_AMBARELLA_SUPPORT_HW_CRYPTO
 	&ambarella_crypto,
@@ -130,7 +131,6 @@ static struct platform_device *ambarella_devices[] __initdata = {
 	&ambarella_uart,
 	&ambarella_uart1,
 	&ambarella_uart2,
-	&ambarella_uart3,
 	&ambarella_udc0,
 	&ambarella_wdt0,
 	&ambarella_dma,

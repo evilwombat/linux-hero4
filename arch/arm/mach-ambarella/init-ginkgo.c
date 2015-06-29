@@ -127,7 +127,6 @@ static struct platform_device *ambarella_devices[] __initdata = {
 #ifdef CONFIG_PLAT_AMBARELLA_SUPPORT_MMAP_AHB64
 	&ambarella_spi1,
 #endif
-	&ambarella_spi_slave,
 	&ambarella_uart,
 	&ambarella_uart1,
 	&ambarella_uart2,

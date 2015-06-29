@@ -60,7 +60,49 @@
 
 #include <linux/input.h>
 /* ==========================================================================*/
+
+static struct gpio_led hero4_led_pins[] = {
+        {
+                .name                   = "front",
+                .default_trigger        = "heartbeat",
+                .gpio                   = 54,
+                .active_low             = 0,
+        },
+        {
+                .name                   = "top",
+                .default_trigger        = "off",
+                .gpio                   = 45,
+                .active_low             = 0,
+        },
+        {
+                .name                   = "back",
+                .default_trigger        = "off",
+                .gpio                   = 46,
+                .active_low             = 0,
+        },
+        {
+                .name                   = "blue",
+                .default_trigger        = "off",
+                .gpio                   = 44,
+                .active_low             = 0,
+        },
+};
+
+static struct gpio_led_platform_data hero4_led_data = {
+        .leds           = hero4_led_pins,
+        .num_leds       = ARRAY_SIZE(hero4_led_pins),
+};
+
+static struct platform_device hero4_leds = {
+        .name   = "leds-gpio",
+        .id     = -1,
+        .dev    = {
+                .platform_data  = &hero4_led_data,
+        }
+};
+
 static struct platform_device *ambarella_devices[] __initdata = {
+	&hero4_leds,
 	&ambarella_adc0,
 #ifdef CONFIG_PLAT_AMBARELLA_SUPPORT_HW_CRYPTO
 	&ambarella_crypto,

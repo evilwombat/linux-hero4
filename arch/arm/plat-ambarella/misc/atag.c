@@ -243,9 +243,9 @@ static struct ambarella_mem_map_desc ambarella_io_desc[] = {
 			.pfn	= __phys_to_pfn(DEFAULT_MEM_START),
 			.length	= CONFIG_AMBARELLA_PPM_SIZE,
 #if defined(CONFIG_PLAT_AMBARELLA_PPM_UNCACHED)
-			.type	= MT_MEMORY_SHARED,
+			.type	= MT_DEVICE,
 #else
-			.type	= MT_MEMORY,
+			.type	= MT_DEVICE,
 #endif
 			},
 	},

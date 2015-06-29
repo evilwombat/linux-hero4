@@ -68,6 +68,14 @@ static void __cpuinit ambarella_smp_secondary_init(unsigned int cpu)
 	spin_unlock(&boot_lock);
 }
 
+static void __cpuinit evilbootstrap_smp_secondary_init(unsigned int cpu)
+{
+	gic_secondary_init(0);
+
+	spin_lock(&boot_lock);
+	spin_unlock(&boot_lock);
+}
+
 static int __cpuinit ambarella_smp_boot_secondary(unsigned int cpu,
 	struct task_struct *idle)
 {
@@ -120,6 +128,15 @@ boot_secondary_exit:
 	return retval;
 }
 
+static int __cpuinit evilbootstrap_smp_boot_secondary(unsigned int cpu,
+	struct task_struct *idle)
+{
+	spin_lock(&boot_lock);
+	writel(virt_to_phys(ambarella_secondary_startup), NOLINUX_MEM_V_START + 0x10);
+	spin_unlock(&boot_lock);
+	return 0;
+}
+
 static void __init ambarella_smp_init_cpus(void)
 {
 	int					i;
@@ -165,6 +182,17 @@ static void __init ambarella_smp_prepare_cpus(unsigned int max_cpus)
 	}
 	ambcache_flush_range((void *)(phead_address),
 		AMBARELLA_BST_HEAD_CACHE_SIZE);
+	smp_max_cpus = max_cpus;
+}
+
+static void __init evilbootstrap_smp_prepare_cpus(unsigned int max_cpus)
+{
+	int i;
+
+	for (i = 0; i < max_cpus; i++)
+		set_cpu_present(i, true);
+	scu_enable(scu_base);
+
 	smp_max_cpus = max_cpus;
 }
 
@@ -264,9 +292,9 @@ static int ambarella_smp_cpu_disable(unsigned int cpu)
 
 struct smp_operations ambarella_smp_ops __initdata = {
 	.smp_init_cpus		= ambarella_smp_init_cpus,
-	.smp_prepare_cpus	= ambarella_smp_prepare_cpus,
-	.smp_secondary_init	= ambarella_smp_secondary_init,
-	.smp_boot_secondary	= ambarella_smp_boot_secondary,
+	.smp_prepare_cpus	= evilbootstrap_smp_prepare_cpus,
+	.smp_secondary_init	= evilbootstrap_smp_secondary_init,
+	.smp_boot_secondary	= evilbootstrap_smp_boot_secondary,
 #ifdef CONFIG_HOTPLUG_CPU
 	.cpu_kill		= ambarella_smp_cpu_kill,
 	.cpu_die		= ambarella_smp_cpu_die,

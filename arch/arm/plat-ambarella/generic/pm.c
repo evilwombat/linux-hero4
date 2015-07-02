@@ -160,6 +160,7 @@ static int ambarella_pm_cpu_do_idle(unsigned long unused)
 	return 0;
 }
 
+#ifdef CONFIG_ARM_CPU_SUSPEND
 static int ambarella_pm_enter_standby(void)
 {
 	int					retval = 0;
@@ -175,6 +176,9 @@ static int ambarella_pm_enter_standby(void)
 
 	return retval;
 }
+#else
+static inline int ambarella_pm_enter_standby(void) { return -ENODEV; }
+#endif
 
 static int ambarella_pm_enter_mem(void)
 {

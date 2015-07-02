@@ -360,7 +360,6 @@ void ambarella_gpio_config(int id, int func)
 {
 	struct ambarella_gpio_chip		*chip;
 	u32					offset;
-	unsigned long				flags;
 
 	chip = ambarella_gpio_id_to_chip(id);
 	if (chip == NULL) {
@@ -370,10 +369,7 @@ void ambarella_gpio_config(int id, int func)
 	}
 	offset = id & 0x1f;
 
-
-	ambarella_gpio_raw_lock(id, &flags);
 	ambarella_gpio_inline_config(chip, offset, func);
-	ambarella_gpio_raw_unlock(id, &flags);
 }
 
 EXPORT_SYMBOL(ambarella_gpio_config);
@@ -382,7 +378,6 @@ void ambarella_gpio_set(int id, int value)
 {
 	struct ambarella_gpio_chip		*chip;
 	u32					offset;
-	unsigned long				flags;
 
 	chip = ambarella_gpio_id_to_chip(id);
 	if (chip == NULL) {
@@ -391,10 +386,7 @@ void ambarella_gpio_set(int id, int value)
 	}
 	offset = id & 0x1f;
 
-	ambarella_gpio_raw_lock(id, &flags);
 	ambarella_gpio_inline_set(chip, offset, value);
-	ambarella_gpio_raw_unlock(id, &flags);
-
 }
 EXPORT_SYMBOL(ambarella_gpio_set);
 
@@ -403,7 +395,6 @@ int ambarella_gpio_get(int id)
 	struct ambarella_gpio_chip		*chip;
 	u32					offset;
 	int val;
-	unsigned long				flags;
 
 	chip = ambarella_gpio_id_to_chip(id);
 	if (chip == NULL) {
@@ -412,9 +403,7 @@ int ambarella_gpio_get(int id)
 	}
 	offset = id & 0x1f;
 
-	ambarella_gpio_raw_lock(id, &flags);
 	val = ambarella_gpio_inline_get(chip, offset);
-	ambarella_gpio_raw_unlock(id, &flags);
 
 	return val;
 }

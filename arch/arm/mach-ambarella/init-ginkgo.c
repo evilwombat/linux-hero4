@@ -323,6 +323,45 @@ static void __init ambarella_init_ginkgo(void)
 
 	ambarella_init_machine("ginkgo");
 
+	ambarella_gpio_config(SSI0_CLK, GPIO_FUNC_HW);
+	ambarella_gpio_config(SSI0_MOSI, GPIO_FUNC_HW);
+	ambarella_gpio_config(SSI0_MISO, GPIO_FUNC_HW);
+	ambarella_gpio_config(SSI0_EN0, GPIO_FUNC_SW_OUTPUT);
+	ambarella_gpio_config(SSI0_EN1, GPIO_FUNC_SW_OUTPUT);
+
+	ambarella_gpio_config(UART3_TX, GPIO_FUNC_HW);
+	ambarella_gpio_config(UART3_RX, GPIO_FUNC_HW);
+	ambarella_gpio_config(SSI0_MISO, GPIO_FUNC_HW);
+
+	/* Hero4 SD slot */
+	ambarella_gpio_set(30, 1);
+	ambarella_gpio_config(30,  GPIO_FUNC_SW_OUTPUT);
+
+	/* Hero4 Front Panel LCD */
+	ambarella_gpio_set(31, 1);
+	ambarella_gpio_config(31,  GPIO_FUNC_SW_OUTPUT);
+
+	/* Hero4 Silver LCD */
+	ambarella_gpio_config(12,  GPIO_FUNC_SW_OUTPUT);
+	msleep(20);
+	ambarella_gpio_set(12, 0);
+	msleep(20);
+	ambarella_gpio_set(12, 1);
+	msleep(20);
+
+	/* Hero4 Silver touchscreen, because we need to read the
+	 * Panel ID from it (because we can't have nice things)
+	 */
+	ambarella_gpio_config(94,  GPIO_FUNC_SW_OUTPUT);
+	msleep(10);
+	ambarella_gpio_set(94, 0);
+	msleep(10);
+	ambarella_gpio_set(94, 1);
+	msleep(10);
+
+	/* Mark SD card as present */
+	ambarella_platform_sd_controller0.slot[0].fixed_cd = 1;
+
 #ifdef CONFIG_OUTER_CACHE
 	ambcache_l2_enable();
 #endif

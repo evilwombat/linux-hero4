@@ -140,6 +140,7 @@ obj-$(CONFIG_FB_SH_MOBILE_LCDC)	  += sh_mobile_lcdcfb.o
 obj-$(CONFIG_FB_OMAP)             += omap/
 obj-$(CONFIG_FB_AMBARELLA)        += ambarella/
 obj-$(CONFIG_FB_ST7585)		  += st7585fb.o
+obj-$(CONFIG_FB_ST7789)		  += st7789fb.o
 obj-y                             += omap2/
 obj-$(CONFIG_XEN_FBDEV_FRONTEND)  += xen-fbfront.o
 obj-$(CONFIG_FB_CARMINE)          += carminefb.o

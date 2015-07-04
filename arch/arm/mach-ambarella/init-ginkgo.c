@@ -61,9 +61,15 @@
 #include <linux/input.h>
 /* ==========================================================================*/
 
-struct i2c_board_info as3715_board_info = {
-	.type = "as3715",
-	.addr = 0x40,
+struct i2c_board_info i2c0_board_info[] = {
+	{
+		.type = "as3715",
+		.addr = 0x40,
+	},
+	{
+		.type = "st7789fb_panel_id",
+		.addr = 0x38,
+	}
 };
 
 
@@ -157,7 +163,7 @@ static struct platform_device *ambarella_pwm_devices[] __initdata = {
 /* ==========================================================================*/
 static struct spi_board_info ambarella_spi_devices[] = {
 	{
-		.modalias	= "spidev",
+		.modalias	= "st7789fb",
 		.bus_num	= 0,
 		.chip_select	= 0,
 	},
@@ -365,8 +371,8 @@ static void __init ambarella_init_ginkgo(void)
 	ambarella_gpio_set(94, 1);
 	msleep(10);
 
-	/* For Hero4 Silver backlight control */
-	i2c_register_board_info(0, &as3715_board_info, 1);
+	/* For Hero4 Silver backlight control and panel ID */
+	i2c_register_board_info(0, i2c0_board_info, ARRAY_SIZE(i2c0_board_info));
 
 	/* Mark SD card as present */
 	ambarella_platform_sd_controller0.slot[0].fixed_cd = 1;

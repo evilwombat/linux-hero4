@@ -61,6 +61,12 @@
 #include <linux/input.h>
 /* ==========================================================================*/
 
+struct i2c_board_info as3715_board_info = {
+	.type = "as3715",
+	.addr = 0x40,
+};
+
+
 static struct gpio_led hero4_led_pins[] = {
         {
                 .name                   = "front",
@@ -359,6 +365,9 @@ static void __init ambarella_init_ginkgo(void)
 	ambarella_gpio_set(94, 1);
 	msleep(10);
 
+	/* For Hero4 Silver backlight control */
+	i2c_register_board_info(0, &as3715_board_info, 1);
+
 	/* Mark SD card as present */
 	ambarella_platform_sd_controller0.slot[0].fixed_cd = 1;
 
@@ -550,8 +559,6 @@ static void __init ambarella_init_ginkgo(void)
 	spi_register_board_info(ambarella_spi_devices,
 		ARRAY_SIZE(ambarella_spi_devices));
 
-	i2c_register_board_info(0, ambarella_board_vin_infos,
-		ARRAY_SIZE(ambarella_board_vin_infos));
 	i2c_register_board_info(1, &ambarella_board_hdmi_info, 1);
 
 	platform_device_register(&ginkgo_board_input);

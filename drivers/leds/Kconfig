@@ -459,6 +459,14 @@ config LEDS_BLINKM
 	  This option enables support for the BlinkM RGB LED connected
 	  through I2C. Say Y to enable support for the BlinkM LED.
 
+config LEDS_AS3715_HERO4
+	tristate "LED backlight control using AS3715 on GoPro Hero4"
+	depends on LEDS_CLASS
+	depends on I2C
+	help
+	  This option enables control of the backlight on the GoPro Hero4
+	  Silver camera, connected to the AS3715 chip.
+
 config LEDS_TRIGGERS
 	bool "LED Trigger support"
 	depends on LEDS_CLASS

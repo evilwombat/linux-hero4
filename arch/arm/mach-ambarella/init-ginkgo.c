@@ -168,7 +168,7 @@ static struct spi_board_info ambarella_spi_devices[] = {
 		.chip_select	= 0,
 	},
 	{
-		.modalias	= "st7585fb",
+		.modalias	= "spidev",
 		.bus_num	= 0,
 		.chip_select	= 1,
 	},

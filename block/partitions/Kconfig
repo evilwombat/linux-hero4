@@ -257,3 +257,12 @@ config AMBPTB_PARTITION
 	  Say Y here if you would like to be able to read the MMC/SD
 	  partition table format used by Amboot.
 	  Otherwise, say N.
+
+config AMBPTB_PARTITION_HERO4
+	bool "Use GoPro Hero4 variant of AMBPTB format" if PARTITION_ADVANCED
+	depends on AMBPTB_PARTITION
+	default y if ARCH_AMBARELLA
+	help
+	  The GoPro Hero4 uses an updated variant of the AMBPTB partition
+	  table format. If you would like to have partition-level access
+	  to the storage device inside the GoPro Hero4, say 'Y' here.

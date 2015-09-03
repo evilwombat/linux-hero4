@@ -35,7 +35,7 @@
 
 #define PART_MAX_WITH_RSV	32
 
-#ifndef CONFIG_PLAT_AMBARELLA_AMBALINK
+#ifndef CONFIG_AMBPTB_PARTITION_HERO4
 #define PART_MAX		20
 #else
 #define PART_MAX		15
@@ -63,7 +63,7 @@ typedef struct flpart_s
 
 #define FLDEV_CMD_LINE_SIZE	1024
 
-#ifndef CONFIG_PLAT_AMBARELLA_AMBALINK
+#ifndef CONFIG_AMBPTB_PARTITION_HERO4
 typedef struct netdev_s
 {
 	/* This section contains networking related settings */
@@ -84,7 +84,7 @@ typedef struct netdev_s
 } __attribute__((packed)) netdev_t;
 #endif
 
-#ifndef CONFIG_PLAT_AMBARELLA_AMBALINK
+#ifndef CONFIG_AMBPTB_PARTITION_HERO4
 typedef struct fldev_s
 {
 	char	sn[32];		/**< Serial number */
@@ -133,7 +133,7 @@ typedef struct fldev_s
 
 #endif
 
-#ifndef CONFIG_PLAT_AMBARELLA_AMBALINK
+#ifndef CONFIG_AMBPTB_PARTITION_HERO4
 #define PTB_SIZE		4096
 #define PTB_PAD_SIZE		\
 	(PTB_SIZE - PART_MAX_WITH_RSV * sizeof(flpart_t) - sizeof(fldev_t))
@@ -168,7 +168,7 @@ typedef struct flpart_table_s
 /* For second version of flpart_meta_t */
 #define PTB_META_MAGIC2		0x4432a0ce
 
-#ifndef CONFIG_PLAT_AMBARELLA_AMBALINK
+#ifndef CONFIG_AMBPTB_PARTITION_HERO4
 #define PART_NAME_LEN		8
 #define PTB_META_ACTURAL_LEN	((sizeof(u32) * 2 + PART_NAME_LEN + sizeof(u32)) * \
 				 PART_MAX + sizeof(u32) + sizeof(u32) + \
@@ -183,7 +183,7 @@ typedef struct flpart_table_s
 #define PTB_META_SIZE		2048
 #define PTB_META_PAD_SIZE	(PTB_META_SIZE - PTB_META_ACTURAL_LEN)
 
-#ifndef CONFIG_PLAT_AMBARELLA_AMBALINK
+#ifndef CONFIG_AMBPTB_PARTITION_HERO4
 typedef struct flpart_meta_s
 {
 	struct {
@@ -219,7 +219,7 @@ typedef struct flpart_meta_s
 	u32	part_dev[PART_MAX];
 	u8	model_name[FW_MODEL_NAME_SIZE];
 
-#ifndef CONFIG_PLAT_AMBARELLA_AMBALINK
+#ifndef CONFIG_AMBPTB_PARTITION_HERO4
 	struct {
 		u32	sblk;
 		u32	nblk;

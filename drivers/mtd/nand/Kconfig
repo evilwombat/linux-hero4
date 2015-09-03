@@ -64,6 +64,15 @@ config MTD_NAND_AMBARELLA_SWECC
 	help
 	  Ambarella nand using software ECC or software BCH.
 
+config MTD_NAND_AMBARELLA_DEFAULT_TIMINGS
+	bool "Use default NAND timings"
+	depends on MTD_NAND_AMBARELLA
+	help
+	  Use conservative NAND timings in an attempt to improve reliability
+	  of NAND access, at the potential expense of NAND performance.
+
+	  If you are having trouble accessing your NAND device, say 'Y' here.
+
 config MTD_NAND_DENALI
         tristate "Support Denali NAND controller"
         help

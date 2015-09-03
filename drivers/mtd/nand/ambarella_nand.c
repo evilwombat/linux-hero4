@@ -1593,8 +1593,7 @@ static int amb_nand_write_oob_std(struct mtd_info *mtd,
 static void amb_nand_set_timing(struct ambarella_nand_info *nand_info,
 	struct ambarella_nand_timing *timing)
 {
-
-#ifndef CONFIG_PLAT_AMBARELLA_AMBALINK
+#ifndef CONFIG_MTD_NAND_AMBARELLA_DEFAULT_TIMINGS
 	amba_writel(nand_info->regbase + FLASH_TIM0_OFFSET, timing->timing0);
 	amba_writel(nand_info->regbase + FLASH_TIM1_OFFSET, timing->timing1);
 	amba_writel(nand_info->regbase + FLASH_TIM2_OFFSET, timing->timing2);

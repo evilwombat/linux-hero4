@@ -2196,10 +2196,14 @@ static int ambarella_nand_probe(struct platform_device *pdev)
 	errorCode = nand_scan_tail(mtd);
 	if (errorCode)
 		goto ambarella_nand_probe_mtd_error;
-
+#ifdef CONFIG_AMBPTB_PARTITION
 	errorCode = ambarella_nand_scan_partitions(nand_info);
 	if (errorCode)
 		goto ambarella_nand_probe_mtd_error;
+#else
+	mtd_device_register(&nand_info->mtd, NULL, 0);
+#endif
+
 
 	platform_set_drvdata(pdev, nand_info);
 

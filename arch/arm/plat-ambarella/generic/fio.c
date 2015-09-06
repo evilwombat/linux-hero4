@@ -533,8 +533,12 @@ EXPORT_SYMBOL(ambarella_fio_rct_reset);
 
 int __init ambarella_init_fio(void)
 {
-#if defined(CONFIG_AMBARELLA_FIO_FORCE_SDIO_GPIO)
-	unsigned long				flags;
+	unsigned long flags;
+	fio_amb_exit_random_mode();
+	enable_fio_dma();
+	amba_writel(FLASH_INT_REG, 0x0);
+	amba_writel(XD_INT_REG, 0x0);
+	amba_writel(CF_STA_REG, CF_STA_CW | CF_STA_DW);
 
 	//SMIO_38 ~ SMIO_43
 	ambarella_gpio_raw_lock(2, &flags);
@@ -544,8 +548,6 @@ int __init ambarella_init_fio(void)
 	amba_writel(GPIO2_MASK_REG, 0x00000060);
 	amba_writel(GPIO2_DATA_REG, 0x00000040);
 	ambarella_gpio_raw_unlock(2, &flags);
-#endif
-
 	return 0;
 }
 

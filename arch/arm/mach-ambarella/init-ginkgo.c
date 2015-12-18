@@ -345,6 +345,14 @@ static void __init ambarella_init_ginkgo(void)
 	ambarella_gpio_config(UART3_RX, GPIO_FUNC_HW);
 	ambarella_gpio_config(SSI0_MISO, GPIO_FUNC_HW);
 
+	/* Hero4 SDIO for WLAN */
+	ambarella_gpio_config(SMIO_38, GPIO_FUNC_HW);
+	ambarella_gpio_config(SMIO_39, GPIO_FUNC_HW);
+	ambarella_gpio_config(SMIO_40, GPIO_FUNC_HW);
+	ambarella_gpio_config(SMIO_41, GPIO_FUNC_HW);
+	ambarella_gpio_config(SMIO_42, GPIO_FUNC_HW);
+	ambarella_gpio_config(SMIO_43, GPIO_FUNC_HW);
+
 	/* Hero4 SD slot */
 	ambarella_gpio_set(30, 1);
 	ambarella_gpio_config(30,  GPIO_FUNC_SW_OUTPUT);

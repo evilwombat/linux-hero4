@@ -2200,7 +2200,7 @@ static int ambarella_nand_probe(struct platform_device *pdev)
 	if (errorCode)
 		goto ambarella_nand_probe_mtd_error;
 #else
-	mtd_device_register(&nand_info->mtd, NULL, 0);
+	mtd_device_parse_register(mtd, NULL, NULL, NULL, 0);
 #endif
 
 

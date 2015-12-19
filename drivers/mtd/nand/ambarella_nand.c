@@ -2180,6 +2180,8 @@ static int ambarella_nand_probe(struct platform_device *pdev)
 	ambarella_nand_init_chip(nand_info);
 
 	mtd = &nand_info->mtd;
+	mtd->name = "ambarella_nand";
+
 	errorCode = nand_scan_ident(mtd, plat_nand->sets->nr_chips, NULL);
 	if (errorCode)
 		goto ambarella_nand_probe_mtd_error;

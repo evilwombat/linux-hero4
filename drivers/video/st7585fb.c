@@ -137,7 +137,7 @@ struct st7585_data {
 	unsigned char		vram[VRAM_LEN];
 };
 
-int spisend(struct st7585_data *drvdata, unsigned int val)
+static int st7585_spi_send_word(struct st7585_data *drvdata, unsigned int val)
 {
 	return spi_write(drvdata->spi, (u8 *) &val, 2);
 }
@@ -150,15 +150,15 @@ static void st7585fb_deferred_io(struct fb_info *info,
 	struct st7585_data *dd = info->par;
 
 	for (col = 0; col < 8; col++) {
-		spisend(dd, 0x40 | col);
-		spisend(dd, 0x8d);
+		st7585_spi_send_word(dd, 0x40 | col);
+		st7585_spi_send_word(dd, 0x8d);
 
 		for (row = 0; row < 75; row++) {
 			t = 0;
 
 			for (i = 0; i < 8; i++)
 				t |= ((vram[col + row * 8]) & (1 << (7-i))) ? (1 << i) : 0;
-			spisend(dd, 0x100 | t);
+			st7585_spi_send_word(dd, 0x100 | t);
 		}
 	}
 }
@@ -190,12 +190,6 @@ static int st7585_probe(struct spi_device *spi)
 	if (ret)
 		return ret;
 
-	spisend(drvdata, 0x21);
-	spisend(drvdata, 0x9c);
-	spisend(drvdata, 0x20);
-	spisend(drvdata, 0x0c);
-	spisend(drvdata, 0x8d);
-
 	drvdata->info = framebuffer_alloc(0, &spi->dev);
 	if (!drvdata->info) {
 		return -ENOMEM;
@@ -224,6 +218,21 @@ static int st7585_probe(struct spi_device *spi)
 		framebuffer_release(drvdata->info);
 		return -EINVAL;
 	}
+
+	/* Initialize panel */
+	st7585_spi_send_word(drvdata, 0x21);
+	st7585_spi_send_word(drvdata, 0x9c);
+	st7585_spi_send_word(drvdata, 0x20);
+	st7585_spi_send_word(drvdata, 0x08);
+
+	/* Write initial buffer contents to panel to clear dirty lines */
+	st7585fb_deferred_io(drvdata->info, NULL);
+
+	/* Turn on panel */
+	st7585_spi_send_word(drvdata, 0x20);
+	st7585_spi_send_word(drvdata, 0x0c);
+	st7585_spi_send_word(drvdata, 0x8d);
+
 
         printk(KERN_INFO "fb%d: %s frame buffer device\n",
 	       drvdata->info->node, drvdata->info->fix.id);

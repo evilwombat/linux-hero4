@@ -76,13 +76,13 @@ struct i2c_board_info i2c0_board_info[] = {
 static struct gpio_led hero4_led_pins[] = {
         {
                 .name                   = "front",
-                .default_trigger        = "heartbeat",
+                .default_trigger        = "off",
                 .gpio                   = 54,
                 .active_low             = 0,
         },
         {
                 .name                   = "top",
-                .default_trigger        = "off",
+                .default_trigger        = "heartbeat",
                 .gpio                   = 45,
                 .active_low             = 0,
         },

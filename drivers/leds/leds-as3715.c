@@ -33,13 +33,16 @@ struct as3715_data {
 
 static void as3715_init_regs(struct i2c_client *client)
 {
+#ifdef CONFIG_FB_ST7789
 	i2c_smbus_write_byte_data(client, 0x00, 0xb0);
 	i2c_smbus_write_byte_data(client, 0x01, 0xd0);
 	i2c_smbus_write_byte_data(client, 0x02, 0xf8);
 	i2c_smbus_write_byte_data(client, 0x03, 0x28);
 	i2c_smbus_write_byte_data(client, 0x04, 0x9c);
 	i2c_smbus_write_byte_data(client, 0x05, 0xda);
+#endif
 	i2c_smbus_write_byte_data(client, 0x06, 0x73);
+#ifdef CONFIG_FB_ST7789
 	i2c_smbus_write_byte_data(client, 0x07, 0x43);
 	i2c_smbus_write_byte_data(client, 0x08, 0x43);
 	i2c_smbus_write_byte_data(client, 0x09, 0x00);
@@ -119,6 +122,7 @@ static void as3715_init_regs(struct i2c_client *client)
 	i2c_smbus_write_byte_data(client, 0x8e, 0x00);
 	i2c_smbus_write_byte_data(client, 0x90, 0x8d);
 	i2c_smbus_write_byte_data(client, 0x91, 0x02);
+#endif
 }
 
 static int as3715_led_set(struct i2c_client *client)
